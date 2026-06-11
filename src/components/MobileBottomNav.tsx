@@ -93,7 +93,8 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
               icon: TvMinimalPlay,
               label: '电视直播',
               href: '/live',
-            },
+            { icon: Star, label: '纪录片', href: '/documentary' },
+  ]);
           ]
         : []),
     ];
