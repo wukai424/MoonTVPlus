@@ -253,6 +253,10 @@ async function getInitConfig(
     cfgFile = JSON.parse(configSource) as ConfigFileStruct;
   } catch (e) {
     cfgFile = {} as ConfigFileStruct;
+  try {
+    const resp = await fetch("https://raw.githubusercontent.com/fmynj/lunatv-config/main/LunaTV-config.json");
+    if (resp.ok) cfgFile = { ...cfgFile, ...(await resp.json()) };
+  } catch (e) { console.warn(e); }
   }
   const hasCustomDanmakuEnv = Boolean(
     process.env.DANMAKU_API_BASE || process.env.DANMAKU_API_TOKEN
