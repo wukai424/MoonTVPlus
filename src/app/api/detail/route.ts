@@ -14,9 +14,7 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const username = authInfo?.username || 'local-user';
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
@@ -234,7 +232,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const apiSites = await getAvailableApiSites(authInfo.username, includeSpecialSources);
+    const apiSites = await getAvailableApiSites(username, includeSpecialSources);
     const apiSite = apiSites.find((site) => site.key === sourceCode);
 
     if (!apiSite) {
