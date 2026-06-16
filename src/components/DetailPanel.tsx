@@ -386,14 +386,38 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
           return;
         }
 
-        // 优先使用苹果CMS数据（短剧等）
-        // 如果 cmsData 存在但 desc 为空，尝试通过 source-detail API 获取
+        // 优先使用 TMDB 数据——默认首选数据源
+        // 先尝试 TMDB，失败后再回退到 CMS/Bangumi/Douban
+        const canTryTmdb = !!(tmdbId || title);
+        if (canTryTmdb) {
+          try {
+            await fetchTmdbData();
+            // TMDB 成功 — 如果有 CMS 数据，保存为可切换的备用源
+            if (cmsData) {
+              const cmsFallback: DetailData = {
+                title: title,
+                intro: cmsData.desc || '',
+                episodesCount: cmsData.episodes?.length,
+                poster: poster,
+              };
+              setOriginalDetailData(cmsFallback);
+              setOriginalSource('cms');
+            }
+            setLoading(false);
+            return;
+          } catch (tmdbErr) {
+            console.error('TMDB 获取失败，回退到备用数据源:', tmdbErr);
+            // TMDB 失败，继续执行后面的回退逻辑
+          }
+        }
+
+        // 回退数据源：苹果CMS数据（短剧等）
         if (cmsData) {
           setCurrentSource('cms');
           setOriginalSource('cms');
           if (cmsData.desc) {
             // 有 desc，直接使用
-            const data = {
+            const data: DetailData = {
               title: title,
               intro: cmsData.desc,
               episodesCount: cmsData.episodes?.length,
@@ -417,7 +441,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
               );
               if (response.ok) {
                 const data = await response.json();
-                const detailData = {
+                const detailData: DetailData = {
                   title: data.title || title,
                   intro: data.desc || '',
                   episodesCount:
@@ -674,10 +698,10 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
     isUsingTmdb,
   ]);
 
-  // 切换数据源的函数
+  // 切换数据源：TMDB ↔ 备用源（CMS/Douban/Bangumi）
   const handleToggleSource = async () => {
     if (currentSource === 'tmdb') {
-      // 切换回原始数据源
+      // 切换到备用数据源（CMS/Douban/Bangumi）
       if (originalDetailData) {
         setDetailData(originalDetailData);
         setCurrentSource(originalSource);
@@ -697,7 +721,7 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
       } catch (err) {
         console.error('切换到TMDB失败:', err);
         setError(err instanceof Error ? err.message : '切换到TMDB失败');
-        // 切换失败，但保持 currentSource 为 tmdb，这样可以显示切换回按钮
+        // 切换失败，但保持 currentSource 为 tmdb，这样可以显示切换按钮
         setCurrentSource('tmdb');
       } finally {
         setLoading(false);
@@ -1435,9 +1459,9 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
                         <button
                           onClick={handleToggleSource}
                           disabled={loading}
-                          className='px-3 py-1.5 text-sm rounded-lg bg-gray-500 hover:bg-gray-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                          className='px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                         >
-                          切换回{' '}
+                          切换到{' '}
                           {originalSource === 'douban'
                             ? 'Douban'
                             : originalSource === 'bangumi'
@@ -1904,9 +1928,9 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
                         <button
                           onClick={handleToggleSource}
                           disabled={loading}
-                          className='px-3 py-1.5 text-sm rounded-lg bg-gray-500 hover:bg-gray-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                          className='px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                         >
-                          切换回{' '}
+                          切换到{' '}
                           {originalSource === 'douban'
                             ? 'Douban'
                             : originalSource === 'bangumi'
@@ -2034,9 +2058,9 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
                       <button
                         onClick={handleToggleSource}
                         disabled={loading}
-                        className='px-3 py-1.5 text-sm rounded-lg bg-gray-500 hover:bg-gray-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                        className='px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                       >
-                        切换回{' '}
+                        切换到{' '}
                         {originalSource === 'douban'
                           ? 'Douban'
                           : originalSource === 'bangumi'
@@ -2500,9 +2524,9 @@ const DetailPanel: React.FC<DetailPanelProps> = ({
                       <button
                         onClick={handleToggleSource}
                         disabled={loading}
-                        className='px-3 py-1.5 text-sm rounded-lg bg-gray-500 hover:bg-gray-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                        className='px-3 py-1.5 text-sm rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                       >
-                        切换回{' '}
+                        切换到{' '}
                         {originalSource === 'douban'
                           ? 'Douban'
                           : originalSource === 'bangumi'
