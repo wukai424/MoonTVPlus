@@ -11,7 +11,7 @@ export interface BaiduShareListResult {
   cookie: string;
 }
 
-const API_BASE = 'https://pan.baidu.com/';
+const API_BASE = 'https://baidu-proxy.kaitv.qzz.io/';
 const VIDEO_EXTS = [
   '.mp4', '.mkv', '.avi', '.rmvb', '.mov', '.flv', '.wmv', '.webm', '.3gp', '.mpeg', '.mpg', '.ts', '.mts', '.m2ts', '.vob', '.divx', '.xvid', '.m4v', '.ogv', '.f4v', '.rm', '.asf', '.dat', '.dv', '.m2v',
 ];
@@ -111,7 +111,7 @@ async function requestApi(
 async function getUid(cookie: string): Promise<string | null> {
   try {
     const response = await fetch(
-      'https://mbd.baidu.com/userx/v1/info/get?appname=baiduboxapp&fields=%5B%22bg_image%22,%22member%22,%22uid%22,%22avatar%22,%22avatar_member%22%5D&client&clientfrom&lang=zh-cn&tpl&ttt',
+      'https://baidu-proxy.kaitv.qzz.io/mbd/userx/v1/info/get?appname=baiduboxapp&fields=%5B%22bg_image%22,%22member%22,%22uid%22,%22avatar%22,%22avatar_member%22%5D&client&clientfrom&lang=zh-cn&tpl&ttt',
       {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
