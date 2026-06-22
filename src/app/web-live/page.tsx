@@ -167,7 +167,6 @@ export default function WebLivePage() {
       this.loader = controller;
       fetch(context.url, {
         method: 'GET',
-        headers: new Headers(context.headers || {}),
         referrerPolicy: 'no-referrer',
         signal: config.signal || controller.signal,
       })

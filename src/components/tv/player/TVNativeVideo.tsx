@@ -216,13 +216,13 @@ export default function TVNativeVideo({
                   this.stats = { trequest: performance.now(), retry: 0 };
                   const controller = new AbortController();
                   this.loader = controller;
-                  const headers = new Headers(context.headers || {});
-                  // 清除可能触发热链保护的 header
-                  headers.delete('Referer');
-                  fetch(context.url, {
+                  // 跨域请求走 CF Worker 代理绕过 Origin 热链保护
+                  const targetUrl = context.url.startsWith('https://') &&
+                    !context.url.includes('kaitv.qzz.io')
+                    ? `https://m3u8-proxy.kaitv.qzz.io/?url=${encodeURIComponent(context.url)}`
+                    : context.url;
+                  fetch(targetUrl, {
                     method: 'GET',
-                    headers,
-                    referrerPolicy: 'no-referrer',
                     signal: config.signal || controller.signal,
                   })
                   .then(async res => {
