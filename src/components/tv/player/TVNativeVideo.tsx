@@ -217,9 +217,12 @@ export default function TVNativeVideo({
                   const controller = new AbortController();
                   this.loader = controller;
                   const headers = new Headers(context.headers || {});
+                  // 清除可能触发热链保护的 header
+                  headers.delete('Referer');
                   fetch(context.url, {
                     method: 'GET',
                     headers,
+                    referrerPolicy: 'no-referrer',
                     signal: config.signal || controller.signal,
                   })
                   .then(async res => {
