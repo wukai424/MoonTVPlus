@@ -6818,7 +6818,7 @@ function PlayPageClient() {
 
               const hls = new Hls({
                 debug: false, // 关闭日志
-                enableWorker: true, // WebWorker 解码，降低主线程压力
+                enableWorker: false, // 关闭 WebWorker，修复 manifestParsingError
                 // 点播播放不需要 LL-HLS，小缓冲在 Safari 高倍速下更容易抖动。
                 lowLatencyMode: false,
                 autoStartLoad: true,

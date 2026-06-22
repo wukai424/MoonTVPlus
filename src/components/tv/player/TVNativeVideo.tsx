@@ -198,7 +198,7 @@ export default function TVNativeVideo({
                 }
               : undefined;
             const hls = new Hls({
-              enableWorker: true,
+              enableWorker: false,
               lowLatencyMode: live,
               backBufferLength: live ? 10 : 30,
               maxBufferLength: live ? 18 : 45,
