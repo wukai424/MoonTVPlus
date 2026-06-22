@@ -141,11 +141,54 @@ export default function WebLivePage() {
 
   function m3u8Loader(video: HTMLVideoElement, url: string) {
     if (!Hls) return;
-    const hls = new Hls({ debug: false, enableWorker: true, lowLatencyMode: true });
+    const hls = new Hls({
+      debug: false,
+      enableWorker: true,
+      lowLatencyMode: true,
+      // ffzy-plays.com 等 CDN 不支持 HEAD，跳过探测直接 GET
+      pLoader: NoHeadPLoader,
+    });
     hls.loadSource(url);
     hls.attachMedia(video);
     (video as any).hls = hls;
   }
+
+  // 在模块顶层定义一次，共用
+  const NoHeadPLoader = class {
+    private config: any;
+    private loader: any;
+    private stats: any;
+    constructor(config: any) { this.config = config; }
+    destroy() {}
+    abort() { this.loader?.abort?.(); }
+    load(context: any, config: any, callbacks: any) {
+      this.stats = { trequest: performance.now(), retry: 0 };
+      const controller = new AbortController();
+      this.loader = controller;
+      fetch(context.url, {
+        method: 'GET',
+        headers: new Headers(context.headers || {}),
+        signal: config.signal || controller.signal,
+      })
+      .then(res => {
+        this.stats.tfirst = performance.now();
+        this.stats.loaded = 0;
+        this.stats.total = parseInt(res.headers.get('Content-Length') || '0') || 0;
+        callbacks.onProgress?.(this.stats, context, null, null);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const parse = context.responseType === 'arraybuffer' ? res.arrayBuffer() : res.text();
+        return parse.then(data => {
+          this.stats.tload = performance.now();
+          return { url: res.url, data };
+        });
+      })
+      .then(response => callbacks.onSuccess(response, this.stats, context, null))
+      .catch(err => {
+        this.stats.tload = performance.now();
+        callbacks.onError({ code: (err as any)?.code || 0, text: (err as any)?.message }, this.stats, context, null);
+      });
+    }
+  } as any;
 
   function flvLoader(video: HTMLVideoElement, url: string) {
     if (!flvjs) return;

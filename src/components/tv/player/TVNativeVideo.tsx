@@ -203,6 +203,49 @@ export default function TVNativeVideo({
               backBufferLength: live ? 10 : 30,
               maxBufferLength: live ? 18 : 45,
               ...(CustomLoader ? { loader: CustomLoader } : {}),
+              // 部分 CDN（如 ffzy-plays.com）对 m3u8 的 HEAD 请求返回 502，
+              // 但 GET 正常。用自定义 pLoader 跳过 HEAD 探测。
+              pLoader: class {
+                private config: any;
+                private loader: any;
+                private stats: any;
+                constructor(config: any) { this.config = config; }
+                destroy() {}
+                abort() { this.loader?.abort?.(); }
+                load(context: any, config: any, callbacks: any) {
+                  this.stats = { trequest: performance.now(), retry: 0 };
+                  const controller = new AbortController();
+                  this.loader = controller;
+                  const headers = new Headers(context.headers || {});
+                  fetch(context.url, {
+                    method: 'GET',
+                    headers,
+                    signal: config.signal || controller.signal,
+                  })
+                  .then(res => {
+                    this.stats.tfirst = performance.now();
+                    this.stats.loaded = 0;
+                    this.stats.total = parseInt(res.headers.get('Content-Length') || '0') || 0;
+                    callbacks.onProgress?.(this.stats, context, null, null);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    if (context.responseType === 'arraybuffer') {
+                      return res.arrayBuffer().then(data => {
+                        this.stats.tload = performance.now();
+                        return { url: res.url, data };
+                      });
+                    }
+                    return res.text().then(data => {
+                      this.stats.tload = performance.now();
+                      return { url: res.url, data };
+                    });
+                  })
+                  .then(response => callbacks.onSuccess(response, this.stats, context, null))
+                  .catch(err => {
+                    this.stats.tload = performance.now();
+                    callbacks.onError({ code: (err as any)?.code || 0, text: (err as any)?.message }, this.stats, context, null);
+                  });
+                }
+              } as any,
             });
             hls.loadSource(url);
             hls.attachMedia(videoEl);
