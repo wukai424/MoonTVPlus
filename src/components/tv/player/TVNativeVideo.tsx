@@ -222,24 +222,19 @@ export default function TVNativeVideo({
                     headers,
                     signal: config.signal || controller.signal,
                   })
-                  .then(res => {
+                  .then(async res => {
                     this.stats.tfirst = performance.now();
                     this.stats.loaded = 0;
                     this.stats.total = parseInt(res.headers.get('Content-Length') || '0') || 0;
                     callbacks.onProgress?.(this.stats, context, null, null);
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    if (context.responseType === 'arraybuffer') {
-                      return res.arrayBuffer().then(data => {
-                        this.stats.tload = performance.now();
-                        return { url: res.url, data };
-                      });
-                    }
-                    return res.text().then(data => {
-                      this.stats.tload = performance.now();
-                      return { url: res.url, data };
-                    });
+                    const data = context.responseType === 'arraybuffer'
+                      ? await res.arrayBuffer()
+                      : await res.text();
+                    this.stats.tload = performance.now();
+                    return { url: res.url, data };
                   })
-                  .then(response => callbacks.onSuccess(response, this.stats, context, null))
+                  .then((response: any) => callbacks.onSuccess(response, this.stats, context, null))
                   .catch(err => {
                     this.stats.tload = performance.now();
                     callbacks.onError({ code: (err as any)?.code || 0, text: (err as any)?.message }, this.stats, context, null);
