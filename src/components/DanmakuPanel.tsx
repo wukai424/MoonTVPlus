@@ -3,7 +3,7 @@
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getEpisodes, searchAnime } from '@/lib/danmaku/api';
+import { getEpisodes, searchAnime, getBatchEpisodeDanmakuCounts } from '@/lib/danmaku/api';
 import type {
   DanmakuAnime,
   DanmakuComment,
@@ -42,6 +42,68 @@ export default function DanmakuPanel({
   const [episodeViewMode, setEpisodeViewMode] = useState<'list' | 'grid'>('list');
   const [isEpisodeGroupHovered, setIsEpisodeGroupHovered] = useState(false);
   const episodesPerGroup = 50;
+
+  // 弹幕数量状态（Map<episodeId, count>）
+  const [episodeDanmakuCounts, setEpisodeDanmakuCounts] = useState<Map<number, number>>(new Map());
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // 批量获取当前分组内剧集的弹幕数量
+  const fetchDanmakuCounts = useCallback(async (episodeList: DanmakuEpisode[]) => {
+    // 取消之前的请求
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const episodeIds = episodeList
+      .map(ep => ep.episodeId)
+      .filter(id => id && !episodeDanmakuCounts.has(id));
+
+    if (episodeIds.length === 0) return;
+
+    await getBatchEpisodeDanmakuCounts(
+      episodeIds,
+      (episodeId, count) => {
+        setEpisodeDanmakuCounts(prev => {
+          const next = new Map(prev);
+          next.set(episodeId, count);
+          return next;
+        });
+      },
+      controller.signal
+    );
+  }, [episodeDanmakuCounts]);
+
+  // 当当前分组的剧集变化时，触发批量获取弹幕数量
+  useEffect(() => {
+    if (episodes.length === 0) return;
+    const currentIds = currentGroupEpisodes
+      .filter(ep => ep.episodeId)
+      .map(ep => ep.episodeId);
+    if (currentIds.length === 0) return;
+
+    // 只获取还未加载过的
+    const uncachedIds = currentIds.filter(id => !episodeDanmakuCounts.has(id));
+    if (uncachedIds.length === 0) return;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    getBatchEpisodeDanmakuCounts(
+      uncachedIds,
+      (episodeId, count) => {
+        setEpisodeDanmakuCounts(prev => {
+          const next = new Map(prev);
+          next.set(episodeId, count);
+          return next;
+        });
+      },
+      controller.signal
+    );
+
+    return () => controller.abort();
+  }, [episodes, episodeGroupIndex, episodeDescending, episodeDanmakuCounts]);
 
   // 搜索弹幕
   const handleSearch = useCallback(async (keyword: string) => {
@@ -99,8 +161,11 @@ export default function DanmakuPanel({
 
   // 选择剧集
   const handleEpisodeSelect = useCallback(
-    (episode: DanmakuEpisode) => {
+    (episode: DanmakuEpisode & { episodeNumber?: number }) => {
       if (!selectedAnime) return;
+
+      // 优先使用实时获取的数量，其次使用后端返回的缓存数量
+      const danmakuCount = episodeDanmakuCounts.get(episode.episodeId) ?? episode.danmakuCount;
 
       const selection: DanmakuSelection = {
         animeId: selectedAnime.animeId,
@@ -108,11 +173,12 @@ export default function DanmakuPanel({
         animeTitle: selectedAnime.animeTitle,
         episodeTitle: episode.episodeTitle,
         searchKeyword: searchKeyword.trim() || undefined, // 使用当前搜索框的关键词
+        danmakuCount, // 传递弹幕数量
       };
 
       onDanmakuSelect(selection);
     },
-    [selectedAnime, searchKeyword, onDanmakuSelect]
+    [selectedAnime, searchKeyword, onDanmakuSelect, episodeDanmakuCounts]
   );
 
   // 回到搜索结果
@@ -483,11 +549,12 @@ export default function DanmakuPanel({
                   <div className='grid grid-cols-3 gap-2 sm:grid-cols-4'>
                     {currentGroupEpisodes.map((episode) => {
                       const isSelected = isEpisodeSelected(episode.episodeId);
+                      const count = episodeDanmakuCounts.get(episode.episodeId) ?? episode.danmakuCount;
                       return (
                         <button
                           key={episode.episodeId}
                           onClick={() => handleEpisodeSelect(episode)}
-                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                          className={`rounded-lg px-3 py-2 text-sm font-medium transition-all relative ${
                             isSelected
                               ? 'bg-green-500 text-white shadow-md'
                               : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
@@ -497,6 +564,16 @@ export default function DanmakuPanel({
                           <div className='truncate'>
                             {getEpisodeDisplayLabel(episode.episodeTitle, episode.episodeNumber)}
                           </div>
+                          {count !== undefined && count > 0 && (
+                            <div className={`text-[10px] mt-0.5 ${isSelected ? 'text-white/80' : 'text-green-600 dark:text-green-400'}`}>
+                              💬 {count}
+                            </div>
+                          )}
+                          {count === 0 && episodeDanmakuCounts.has(episode.episodeId) && (
+                            <div className='text-[10px] mt-0.5 text-gray-400 dark:text-gray-500'>
+                              💬 0
+                            </div>
+                          )}
                         </button>
                       );
                     })}
@@ -505,6 +582,7 @@ export default function DanmakuPanel({
                   <div className='space-y-2'>
                     {currentGroupEpisodes.map((episode) => {
                       const isSelected = isEpisodeSelected(episode.episodeId);
+                      const count = episodeDanmakuCounts.get(episode.episodeId) ?? episode.danmakuCount;
                       return (
                         <button
                           key={episode.episodeId}
@@ -537,6 +615,16 @@ export default function DanmakuPanel({
                               <span className='flex items-center gap-1'>
                                 🆔 ID: {episode.episodeId}
                               </span>
+                              {count !== undefined && count > 0 && (
+                                <span className='flex items-center gap-1'>
+                                  💬 {count}
+                                </span>
+                              )}
+                              {count === 0 && episodeDanmakuCounts.has(episode.episodeId) && (
+                                <span className='flex items-center gap-1 text-gray-400 dark:text-gray-500'>
+                                  💬 0
+                                </span>
+                              )}
                             </div>
                           </div>
 
