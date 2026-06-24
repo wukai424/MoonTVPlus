@@ -119,8 +119,16 @@ export default function DanmakuPanel({
       const response = await searchAnime(keyword.trim());
 
       if (response.success && response.animes.length > 0) {
-        setSearchResults(response.animes);
-        setSearchError(null);
+        // 过滤黑名单关键词（B站二次剪辑/解说等）
+        const { filterBlacklistedSources } = await import('@/lib/danmaku/filter');
+        const filtered = filterBlacklistedSources(response.animes);
+        if (filtered.length > 0) {
+          setSearchResults(filtered);
+          setSearchError(null);
+        } else {
+          setSearchResults([]);
+          setSearchError('所有搜索结果均被过滤，尝试其他关键词');
+        }
       } else {
         setSearchResults([]);
         setSearchError(

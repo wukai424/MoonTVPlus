@@ -30,6 +30,7 @@ import {
   saveDanmakuSourceIndex,
   saveManualDanmakuSelection,
 } from '@/lib/danmaku/selection-memory';
+import { filterBlacklistedSources } from '@/lib/danmaku/filter';
 import type { DanmakuAnime, DanmakuComment, DanmakuSelection, DanmakuSettings } from '@/lib/danmaku/types';
 import {
   deleteFavorite,
@@ -5274,6 +5275,16 @@ function PlayPageClient() {
     videoYear?: string
   ): DanmakuAnime[] => {
     if (animes.length <= 1) return animes;
+
+    // 第一步：过滤黑名单关键词（B站二次剪辑/解说等）
+    const cleaned = filterBlacklistedSources(animes);
+
+    if (cleaned.length === 0) {
+      console.log('[弹幕匹配] 所有结果均被黑名单过滤，返回原始结果');
+      return animes;
+    }
+
+    if (cleaned.length === 1) return cleaned;
 
     // 标准化标题：移除空格、全角转半角
     const normalizeTitle = (title: string): string => {
