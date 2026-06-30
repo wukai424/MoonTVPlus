@@ -65,8 +65,14 @@ export async function GET(request: Request) {
     if (contentType.toLowerCase().includes('mpegurl') || contentType.toLowerCase().includes('octet-stream') || decodedUrl.includes('.m3u8')) {
       // 获取最终的响应URL（处理重定向后的URL）
       const finalUrl = response.url;
-      const m3u8Content = await response.text();
+      let m3u8Content = await response.text();
       responseUsed = true; // 标记 response 已被使用
+
+      m3u8Content = applyAdFilter(
+        source,
+        m3u8Content,
+        config.SiteConfig?.CustomAdFilterCode || ''
+      );
 
       // 使用最终的响应URL作为baseUrl，而不是原始的请求URL
       const baseUrl = getBaseUrl(finalUrl);
@@ -165,6 +171,140 @@ function rewriteM3U8Content(content: string, baseUrl: string, req: Request, sour
   }
 
   return rewrittenLines.join('\n');
+}
+
+function applyAdFilter(source: string, m3u8Content: string, customAdFilterCode: string): string {
+  if (!m3u8Content) return '';
+
+  if (customAdFilterCode && customAdFilterCode.trim()) {
+    try {
+      const jsCode = customAdFilterCode
+        .replace(/(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*([,)])/g, '$1$3')
+        .replace(/\)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*\{/g, ') {')
+        .replace(/(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g, '$1 $2 =');
+
+      const customFunction = new Function(
+        'type',
+        'm3u8Content',
+        `${jsCode}
+const filter = typeof filterAdsFromM3U8 === 'function'
+  ? filterAdsFromM3U8
+  : (typeof filterAdsFromM3U8Default === 'function' ? filterAdsFromM3U8Default : null);
+if (!filter) throw new Error('Custom ad filter must define filterAdsFromM3U8 or filterAdsFromM3U8Default');
+return filter(type, m3u8Content);`
+      );
+
+      return filterAdsFromM3U8Default(source, customFunction(source, m3u8Content));
+    } catch (error) {
+      console.error('Failed to execute custom ad filter, using default rules:', error);
+    }
+  }
+
+  return filterAdsFromM3U8Default(source, m3u8Content);
+}
+
+function filterAdsFromM3U8Default(type: string, m3u8Content: string): string {
+  if (!m3u8Content) return '';
+
+  const adKeywords = [
+    'sponsor',
+    '/ad/',
+    '/ads/',
+    'advert',
+    'advertisement',
+    '/adjump',
+    'redtraffic'
+  ];
+
+  const lines = m3u8Content.replace(/\r\n/g, '\n').split('\n');
+  const filteredLines = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (line.includes('#EXTINF:')) {
+      let urlIndex = i + 1;
+      while (urlIndex < lines.length && lines[urlIndex].startsWith('#')) {
+        urlIndex++;
+      }
+
+      if (urlIndex < lines.length) {
+        const containsAdKeyword = adKeywords.some(keyword =>
+          lines[urlIndex].toLowerCase().includes(keyword.toLowerCase())
+        );
+
+        if (containsAdKeyword) {
+          if (
+            filteredLines.length > 0 &&
+            filteredLines[filteredLines.length - 1].includes('#EXT-X-DISCONTINUITY')
+          ) {
+            filteredLines.pop();
+          }
+          i = urlIndex + 1;
+          continue;
+        }
+      }
+    }
+
+    filteredLines.push(line);
+    i++;
+  }
+
+  return removeShortDiscontinuityAdBlocks(type, filteredLines).join('\n');
+}
+
+function removeShortDiscontinuityAdBlocks(source: string, lines: string[]): string[] {
+  const blocks: string[][] = [];
+  let currentBlock: string[] = [];
+
+  for (const line of lines) {
+    if (line.includes('#EXT-X-DISCONTINUITY') && currentBlock.length > 0) {
+      blocks.push(currentBlock);
+      currentBlock = [line];
+    } else {
+      currentBlock.push(line);
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock);
+  }
+
+  const getBlockStats = (block: string[]) => {
+    let duration = 0;
+    let segments = 0;
+
+    for (const line of block) {
+      const match = line.match(/^#EXTINF:([\d.]+)/);
+      if (match) {
+        duration += Number(match[1]);
+        segments++;
+      }
+    }
+
+    return { duration, segments };
+  };
+
+  return blocks
+    .filter((block, index) => {
+      const stats = getBlockStats(block);
+      const prevStats = index > 0 ? getBlockStats(blocks[index - 1]) : { duration: 0, segments: 0 };
+      const nextStats = index + 1 < blocks.length ? getBlockStats(blocks[index + 1]) : { duration: 0, segments: 0 };
+
+      const isShortInsertedBlock =
+        block[0]?.includes('#EXT-X-DISCONTINUITY') &&
+        index > 0 &&
+        index < blocks.length - 1 &&
+        stats.segments > 0 &&
+        stats.duration <= 45 &&
+        stats.segments <= 12 &&
+        prevStats.duration >= 60 &&
+        nextStats.duration >= 60;
+
+      return !isShortInsertedBlock;
+    })
+    .flat();
 }
 
 function rewriteMapUri(line: string, baseUrl: string, proxyBase: string, source: string) {

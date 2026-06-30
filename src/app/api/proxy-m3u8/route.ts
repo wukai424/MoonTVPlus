@@ -157,10 +157,17 @@ export async function GET(request: NextRequest) {
           .replace(/(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g, '$1 $2 =');
 
         // 创建并执行自定义函数
-        const customFunction = new Function('type', 'm3u8Content',
-          jsCode + '\nreturn filterAdsFromM3U8(type, m3u8Content);'
+        const customFunction = new Function(
+          'type',
+          'm3u8Content',
+          `${jsCode}
+const filter = typeof filterAdsFromM3U8 === 'function'
+  ? filterAdsFromM3U8
+  : (typeof filterAdsFromM3U8Default === 'function' ? filterAdsFromM3U8Default : null);
+if (!filter) throw new Error('Custom ad filter must define filterAdsFromM3U8 or filterAdsFromM3U8Default');
+return filter(type, m3u8Content);`
         );
-        m3u8Content = customFunction(source, m3u8Content);
+        m3u8Content = filterAdsFromM3U8Default(source, customFunction(source, m3u8Content));
       } catch (err) {
         console.error('执行自定义去广告代码失败,使用默认规则:', err);
         // 继续使用默认规则
@@ -247,7 +254,60 @@ function filterAdsFromM3U8Default(type: string, m3u8Content: string): string {
     i++;
   }
 
-  return filteredLines.join('\n');
+  return removeShortDiscontinuityAdBlocks(type, filteredLines).join('\n');
+}
+
+function removeShortDiscontinuityAdBlocks(source: string, lines: string[]): string[] {
+  const blocks: string[][] = [];
+  let currentBlock: string[] = [];
+
+  for (const line of lines) {
+    if (line.includes('#EXT-X-DISCONTINUITY') && currentBlock.length > 0) {
+      blocks.push(currentBlock);
+      currentBlock = [line];
+    } else {
+      currentBlock.push(line);
+    }
+  }
+
+  if (currentBlock.length > 0) {
+    blocks.push(currentBlock);
+  }
+
+  const getBlockStats = (block: string[]) => {
+    let duration = 0;
+    let segments = 0;
+
+    for (const line of block) {
+      const match = line.match(/^#EXTINF:([\d.]+)/);
+      if (match) {
+        duration += Number(match[1]);
+        segments++;
+      }
+    }
+
+    return { duration, segments };
+  };
+
+  return blocks
+    .filter((block, index) => {
+      const stats = getBlockStats(block);
+      const prevStats = index > 0 ? getBlockStats(blocks[index - 1]) : { duration: 0, segments: 0 };
+      const nextStats = index + 1 < blocks.length ? getBlockStats(blocks[index + 1]) : { duration: 0, segments: 0 };
+
+      const isShortInsertedBlock =
+        block[0]?.includes('#EXT-X-DISCONTINUITY') &&
+        index > 0 &&
+        index < blocks.length - 1 &&
+        stats.segments > 0 &&
+        stats.duration <= 45 &&
+        stats.segments <= 12 &&
+        prevStats.duration >= 60 &&
+        nextStats.duration >= 60;
+
+      return !isShortInsertedBlock;
+    })
+    .flat();
 }
 
 /**
