@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getConfig } from '@/lib/config';
+import { applyServerM3u8AdFilter } from '@/lib/server/m3u8-ad-filter';
 import { validateProxyUrlServerSide } from '@/lib/server/ssrf';
 
 export const runtime = 'nodejs';
@@ -146,37 +147,11 @@ export async function GET(request: NextRequest) {
 
     // 执行去广告逻辑
     const config = await getConfig();
-    const customAdFilterCode = config.SiteConfig?.CustomAdFilterCode || '';
-
-    if (customAdFilterCode && customAdFilterCode.trim()) {
-      try {
-        // 移除 TypeScript 类型注解,转换为纯 JavaScript
-        const jsCode = customAdFilterCode
-          .replace(/(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*([,)])/g, '$1$3')
-          .replace(/\)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*\{/g, ') {')
-          .replace(/(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g, '$1 $2 =');
-
-        // 创建并执行自定义函数
-        const customFunction = new Function(
-          'type',
-          'm3u8Content',
-          `${jsCode}
-const filter = typeof filterAdsFromM3U8 === 'function'
-  ? filterAdsFromM3U8
-  : (typeof filterAdsFromM3U8Default === 'function' ? filterAdsFromM3U8Default : null);
-if (!filter) throw new Error('Custom ad filter must define filterAdsFromM3U8 or filterAdsFromM3U8Default');
-return filter(type, m3u8Content);`
-        );
-        m3u8Content = filterAdsFromM3U8Default(source, customFunction(source, m3u8Content));
-      } catch (err) {
-        console.error('执行自定义去广告代码失败,使用默认规则:', err);
-        // 继续使用默认规则
-        m3u8Content = filterAdsFromM3U8Default(source, m3u8Content);
-      }
-    } else {
-      // 使用默认去广告规则
-      m3u8Content = filterAdsFromM3U8Default(source, m3u8Content);
-    }
+    m3u8Content = applyServerM3u8AdFilter(
+      source,
+      m3u8Content,
+      config.SiteConfig?.CustomAdFilterCode || ''
+    );
 
     // 处理 m3u8 中的相对链接
     m3u8Content = resolveM3u8Links(m3u8Content, m3u8Url, source, origin, token || '');
@@ -198,117 +173,6 @@ return filter(type, m3u8Content);`
   }
 }
 
-/**
- * 默认去广告规则（服务端版本）
- * 注意：前端 page.tsx 中的 filterAdsFromM3U8 是客户端侧的去广告逻辑（用于直连模式下由 HLS.js 的自定义 loader 拦截）。
- * 本函数用于代理模式下，在服务端对 m3u8 内容进行去广告处理后再返回给客户端。
- * 两套逻辑需要保持同步更新。
- */
-function filterAdsFromM3U8Default(type: string, m3u8Content: string): string {
-  if (!m3u8Content) return '';
-
-  // 广告关键字列表
-  const adKeywords = [
-    'sponsor',
-    '/ad/',
-    '/ads/',
-    'advert',
-    'advertisement',
-    '/adjump',
-    'redtraffic'
-  ];
-
-  // 按行分割M3U8内容
-  const lines = m3u8Content.split('\n');
-  const filteredLines = [];
-
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-
-    // 跳过 #EXT-X-DISCONTINUITY 标识
-    if (line.includes('#EXT-X-DISCONTINUITY')) {
-      i++;
-      continue;
-    }
-
-    // 如果是 EXTINF 行，检查下一行 URL 是否包含广告关键字
-    if (line.includes('#EXTINF:')) {
-      // 检查下一行 URL 是否包含广告关键字
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1];
-        const containsAdKeyword = adKeywords.some(keyword =>
-          nextLine.toLowerCase().includes(keyword.toLowerCase())
-        );
-
-        if (containsAdKeyword) {
-          // 跳过 EXTINF 行和 URL 行
-          i += 2;
-          continue;
-        }
-      }
-    }
-
-    // 保留当前行
-    filteredLines.push(line);
-    i++;
-  }
-
-  return removeShortDiscontinuityAdBlocks(type, filteredLines).join('\n');
-}
-
-function removeShortDiscontinuityAdBlocks(source: string, lines: string[]): string[] {
-  const blocks: string[][] = [];
-  let currentBlock: string[] = [];
-
-  for (const line of lines) {
-    if (line.includes('#EXT-X-DISCONTINUITY') && currentBlock.length > 0) {
-      blocks.push(currentBlock);
-      currentBlock = [line];
-    } else {
-      currentBlock.push(line);
-    }
-  }
-
-  if (currentBlock.length > 0) {
-    blocks.push(currentBlock);
-  }
-
-  const getBlockStats = (block: string[]) => {
-    let duration = 0;
-    let segments = 0;
-
-    for (const line of block) {
-      const match = line.match(/^#EXTINF:([\d.]+)/);
-      if (match) {
-        duration += Number(match[1]);
-        segments++;
-      }
-    }
-
-    return { duration, segments };
-  };
-
-  return blocks
-    .filter((block, index) => {
-      const stats = getBlockStats(block);
-      const prevStats = index > 0 ? getBlockStats(blocks[index - 1]) : { duration: 0, segments: 0 };
-      const nextStats = index + 1 < blocks.length ? getBlockStats(blocks[index + 1]) : { duration: 0, segments: 0 };
-
-      const isShortInsertedBlock =
-        block[0]?.includes('#EXT-X-DISCONTINUITY') &&
-        index > 0 &&
-        index < blocks.length - 1 &&
-        stats.segments > 0 &&
-        stats.duration <= 45 &&
-        stats.segments <= 12 &&
-        prevStats.duration >= 60 &&
-        nextStats.duration >= 60;
-
-      return !isShortInsertedBlock;
-    })
-    .flat();
-}
 
 /**
  * 将 m3u8 中的相对链接转换为绝对链接，并将子 m3u8 链接转为代理链接。
