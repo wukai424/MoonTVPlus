@@ -3,6 +3,8 @@
 import { Loader2, Pause, Play } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { filterM3u8Ads } from '@/lib/m3u8-ad-filter';
+
 declare global {
   interface HTMLVideoElement {
     hls?: any;
@@ -21,34 +23,6 @@ function getSourceType(url: string, explicitType?: SourceType): SourceType {
   if (path.includes('.m3u8') || path.includes('.m3u') || lower.includes('/m3u8') || lower.includes('m3u8') || lower.includes('.m3u')) return 'm3u8';
   if (path.endsWith('.flv') || lower.includes('.flv?')) return 'flv';
   return 'native';
-}
-
-function filterAdsFromM3U8(m3u8Content: string): string {
-  if (!m3u8Content) return '';
-  const adKeywords = ['sponsor', '/ad/', '/ads/', 'advert', 'advertisement', '/adjump', 'redtraffic'];
-  const lines = m3u8Content.split('\n');
-  const filteredLines: string[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (line.includes('#EXT-X-DISCONTINUITY')) {
-      i++;
-      continue;
-    }
-    if (line.includes('#EXTINF:') && i + 1 < lines.length) {
-      const nextLine = lines[i + 1];
-      const isAd = adKeywords.some((keyword) => nextLine.toLowerCase().includes(keyword));
-      if (isAd) {
-        i += 2;
-        continue;
-      }
-    }
-    filteredLines.push(line);
-    i++;
-  }
-
-  return filteredLines.join('\n');
 }
 
 export default function TVNativeVideo({
@@ -187,7 +161,7 @@ export default function TVNativeVideo({
                         const onSuccess = callbacks.onSuccess;
                         callbacks.onSuccess = (response: any, stats: any, context: any, networkDetails: any) => {
                           if (typeof response?.data === 'string') {
-                            response.data = filterAdsFromM3U8(response.data);
+                            response.data = filterM3u8Ads(response.data);
                           }
                           return onSuccess(response, stats, context, networkDetails);
                         };
