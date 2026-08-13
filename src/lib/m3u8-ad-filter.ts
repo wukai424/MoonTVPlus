@@ -259,96 +259,6 @@ function dominantUriFamily(segments: MediaSegment[]): string {
   return dominant;
 }
 
-interface NumberedSegmentUri {
-  series: string;
-  value: number;
-}
-
-function parseNumberedSegmentUri(uri: string): NumberedSegmentUri | null {
-  let cleanPath = uri.split(/[?#]/, 1)[0];
-  let host = '';
-
-  try {
-    if (/^https?:\/\//i.test(cleanPath)) {
-      const url = new URL(cleanPath);
-      host = url.hostname.toLowerCase();
-      cleanPath = url.pathname;
-    } else if (cleanPath.startsWith('//')) {
-      const url = new URL(`https:${cleanPath}`);
-      host = url.hostname.toLowerCase();
-      cleanPath = url.pathname;
-    }
-  } catch {
-    return null;
-  }
-
-  const slashIndex = cleanPath.lastIndexOf('/');
-  const directory = cleanPath.slice(0, slashIndex + 1).toLowerCase();
-  const filename = cleanPath.slice(slashIndex + 1);
-  const match = filename.match(/^(.*\D)?(\d+)(\.[^.]+)$/);
-  if (!match) return null;
-
-  const value = Number(match[2]);
-  if (!Number.isSafeInteger(value)) return null;
-
-  return {
-    series: `${host}${directory}${(
-      match[1] || ''
-    ).toLowerCase()}${match[3].toLowerCase()}`,
-    value,
-  };
-}
-
-function isNumberedSequenceOutlier(
-  previous: MediaSegment[],
-  block: MediaSegment[],
-  next: MediaSegment[]
-): boolean {
-  if (previous.length < 2 || block.length < 2 || next.length < 2) return false;
-
-  const previousTail = parseNumberedSegmentUri(
-    previous[previous.length - 1].uri
-  );
-  const nextHead = parseNumberedSegmentUri(next[0].uri);
-  const candidates = block.map((segment) =>
-    parseNumberedSegmentUri(segment.uri)
-  );
-
-  if (
-    !previousTail ||
-    !nextHead ||
-    candidates.some((candidate) => !candidate) ||
-    previousTail.series !== nextHead.series ||
-    candidates.some((candidate) => candidate?.series !== previousTail.series)
-  ) {
-    return false;
-  }
-
-  const contentGap = nextHead.value - previousTail.value;
-  if (contentGap < 1 || contentGap > 3) return false;
-
-  const numberedCandidates = candidates as NumberedSegmentUri[];
-  for (let index = 1; index < numberedCandidates.length; index++) {
-    if (
-      numberedCandidates[index].value - numberedCandidates[index - 1].value !==
-      1
-    ) {
-      return false;
-    }
-  }
-
-  const first = numberedCandidates[0].value;
-  const last = numberedCandidates[numberedCandidates.length - 1].value;
-  const distanceFromContent =
-    first > nextHead.value
-      ? first - nextHead.value
-      : previousTail.value > last
-      ? previousTail.value - last
-      : 0;
-
-  return distanceFromContent >= 1000;
-}
-
 function totalDuration(segments: MediaSegment[]): number {
   return segments.reduce((total, segment) => total + segment.duration, 0);
 }
@@ -418,7 +328,9 @@ function markShortInterstitials(
       block.length === 0 ||
       block.length > options.maxInterstitialSegments ||
       duration <= 0 ||
-      duration > options.maxInterstitialDuration
+      duration > options.maxInterstitialDuration ||
+      totalDuration(previous) < options.minSurroundingContentDuration ||
+      totalDuration(next) < options.minSurroundingContentDuration
     ) {
       continue;
     }
@@ -431,13 +343,9 @@ function markShortInterstitials(
       currentFamily &&
       nextFamily &&
       previousFamily === nextFamily &&
-      currentFamily !== previousFamily &&
-      totalDuration(previous) >= options.minSurroundingContentDuration &&
-      totalDuration(next) >= options.minSurroundingContentDuration;
+      currentFamily !== previousFamily;
 
-    const sequenceOutlier = isNumberedSequenceOutlier(previous, block, next);
-
-    if (sourceChanged || sequenceOutlier) {
+    if (sourceChanged) {
       block.forEach((segment) => {
         segment.removeReason = 'short-interstitial';
       });

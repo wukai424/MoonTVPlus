@@ -210,52 +210,6 @@ describe('M3U8 ad filter v2', () => {
     expect(result.content).not.toContain('breaks.example.net');
   });
 
-  it('removes a numbered outlier inserted into a continuous same-source stream', () => {
-    const numberedSegments = (start: number, count: number): string[] =>
-      Array.from({ length: count }, (_, index) => [
-        '#EXTINF:4,',
-        `a1cea1d0595${String(start + index).padStart(7, '0')}.ts`,
-      ]).flat();
-    const input = playlist(
-      '#EXTM3U',
-      '#EXT-X-PLAYLIST-TYPE:VOD',
-      ...numberedSegments(69, 5),
-      '#EXT-X-DISCONTINUITY',
-      ...numberedSegments(401355, 7),
-      '#EXT-X-DISCONTINUITY',
-      ...numberedSegments(74, 9),
-      '#EXT-X-ENDLIST'
-    );
-
-    const result = filterM3u8AdsWithReport(input);
-
-    expect(result.removedSegments).toBe(7);
-    expect(result.reasons['short-interstitial']).toBe(7);
-    expect(result.content).not.toContain('0401355.ts');
-    expect(result.content).toContain('0000073.ts');
-    expect(result.content).toContain('0000074.ts');
-  });
-
-  it('keeps a nearby numbered same-source splice', () => {
-    const input = playlist(
-      '#EXTM3U',
-      ...contentSegments('video.example.com', 'content', 3, 4),
-      '#EXT-X-DISCONTINUITY',
-      '#EXTINF:4,',
-      'https://video.example.com/content/100.ts',
-      '#EXTINF:4,',
-      'https://video.example.com/content/101.ts',
-      '#EXT-X-DISCONTINUITY',
-      '#EXTINF:4,',
-      'https://video.example.com/content/3.ts',
-      '#EXTINF:4,',
-      'https://video.example.com/content/4.ts',
-      '#EXT-X-ENDLIST'
-    );
-
-    expect(filterM3u8Ads(input)).toBe(input);
-  });
-
   it('does not apply the short-block heuristic to live playlists', () => {
     const input = playlist(
       '#EXTM3U',
