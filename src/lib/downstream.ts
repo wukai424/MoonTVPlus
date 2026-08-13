@@ -20,7 +20,7 @@ interface ApiSearchItem {
 }
 
 const DEFAULT_SOURCE_API_FALLBACK_PROXY =
-  'https://m3u8-proxy.kaitv.qzz.io/?url=';
+  'https://pz.v88.qzz.io/?url=';
 
 export function buildSourceApiUrl(
   apiBaseUrl: string,
