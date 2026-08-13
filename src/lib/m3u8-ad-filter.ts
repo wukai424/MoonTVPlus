@@ -42,6 +42,7 @@ const DEFAULT_OPTIONS: Required<Omit<M3u8AdFilterOptions, 'source'>> = {
 
 const AD_URI_PATTERNS = [
   /(?:^|[/?&._=-])(?:ad|ads|advert|advertisement|sponsor|commercial|preroll|midroll|postroll)(?:[/?&._=-]|$)/i,
+  /(?:sponsor|advert)/i,
   /(?:adjump|redtraffic|doubleclick|googlesyndication|adservice)/i,
 ];
 
