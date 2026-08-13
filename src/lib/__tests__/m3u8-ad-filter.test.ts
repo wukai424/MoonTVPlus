@@ -153,6 +153,31 @@ describe('M3U8 ad filter v2', () => {
     expect(filterM3u8Ads(input)).toBe(input);
   });
 
+  it('keeps the old sponsor and advert substring matching behavior', () => {
+    const input = playlist(
+      '#EXTM3U',
+      '#EXTINF:10,',
+      'https://video.example.com/content/1.ts',
+      '#EXTINF:5,',
+      'https://cdn.example.com/sponsored-segment-001.ts',
+      '#EXTINF:5,',
+      'https://cdn.example.com/advertising/001.ts',
+      '#EXTINF:5,',
+      'https://cdn.example.com/advertisement001.ts',
+      '#EXTINF:10,',
+      'https://video.example.com/content/2.ts',
+      '#EXT-X-ENDLIST'
+    );
+
+    const result = filterM3u8AdsWithReport(input);
+
+    expect(result.removedSegments).toBe(3);
+    expect(result.reasons.uri).toBe(3);
+    expect(result.content).not.toContain('sponsored-segment');
+    expect(result.content).not.toContain('/advertising/');
+    expect(result.content).not.toContain('advertisement001');
+  });
+
   it('keeps a short same-source discontinuity block', () => {
     const input = playlist(
       '#EXTM3U',
