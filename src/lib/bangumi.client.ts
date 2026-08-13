@@ -1,26 +1,6 @@
 'use client';
 
-export type AnimeDataSource =
-  | 'direct'
-  | 'server-proxy'
-  | 'custom-baseurl'
-  | 'sakura';
-
-/** 桜色镜像站：全域名镜像 bgm.tv → bangumi.lol */
-export const BANGUMI_SAKURA_API_BASE_URL = 'https://api.bangumi.lol';
-export const BANGUMI_SAKURA_SITE_URL = 'https://bangumi.lol';
-export const BANGUMI_OFFICIAL_SITE_URL = 'https://bgm.tv';
-
-export function isValidAnimeDataSource(
-  value: string | null | undefined
-): value is AnimeDataSource {
-  return (
-    value === 'direct' ||
-    value === 'server-proxy' ||
-    value === 'custom-baseurl' ||
-    value === 'sakura'
-  );
-}
+export type AnimeDataSource = 'direct' | 'server-proxy' | 'custom-baseurl';
 
 export interface BangumiCalendarData {
   weekday: {
@@ -83,14 +63,22 @@ function getPrimaryAnimeDataSource(): AnimeDataSource {
   const saved = localStorage.getItem(
     'animeDataSource'
   ) as AnimeDataSource | null;
-  if (isValidAnimeDataSource(saved)) {
+  if (
+    saved === 'direct' ||
+    saved === 'server-proxy' ||
+    saved === 'custom-baseurl'
+  ) {
     return saved;
   }
 
   const runtimeValue = getRuntimeConfig().BANGUMI_DATA_SOURCE as
     | AnimeDataSource
     | undefined;
-  if (isValidAnimeDataSource(runtimeValue)) {
+  if (
+    runtimeValue === 'direct' ||
+    runtimeValue === 'server-proxy' ||
+    runtimeValue === 'custom-baseurl'
+  ) {
     return runtimeValue;
   }
 
@@ -106,7 +94,10 @@ function getBackupAnimeDataSource(
   const saved = localStorage.getItem(
     'animeDataSourceBackup'
   ) as AnimeDataSource | null;
-  const backup = isValidAnimeDataSource(saved) ? saved : 'server-proxy';
+  const backup =
+    saved === 'direct' || saved === 'server-proxy' || saved === 'custom-baseurl'
+      ? saved
+      : 'server-proxy';
 
   return backup === primary ? null : backup;
 }
@@ -129,21 +120,10 @@ function buildBangumiUrl(source: AnimeDataSource, path: string): string {
       }
       return `${customBaseUrl}${normalizedPath}`;
     }
-    case 'sakura':
-      return `${BANGUMI_SAKURA_API_BASE_URL}${normalizedPath}`;
     case 'direct':
     default:
       return `${BANGUMI_OFFICIAL_BASE_URL}${normalizedPath}`;
   }
-}
-
-/** 按当前动漫数据源生成 Bangumi 条目外链（桜色镜像站 → bangumi.lol） */
-export function getBangumiSubjectUrl(id: string | number): string {
-  const origin =
-    getPrimaryAnimeDataSource() === 'sakura'
-      ? BANGUMI_SAKURA_SITE_URL
-      : BANGUMI_OFFICIAL_SITE_URL;
-  return `${origin}/subject/${encodeURIComponent(String(id))}`;
 }
 
 async function fetchBangumiJson<T>(

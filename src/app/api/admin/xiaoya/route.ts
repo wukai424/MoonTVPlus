@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
-import { normalizeApiBaseUrl } from '@/lib/url';
 import { XiaoyaClient } from '@/lib/xiaoya.client';
 
 export const runtime = 'nodejs';
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
       // 测试连接
       try {
         const client = new XiaoyaClient(
-          normalizeApiBaseUrl(configData.ServerURL),
+          configData.ServerURL,
           configData.Username,
           configData.Password,
           configData.Token
@@ -52,7 +51,7 @@ export async function POST(request: NextRequest) {
 
       config.XiaoyaConfig = {
         Enabled: configData.Enabled || false,
-        ServerURL: normalizeApiBaseUrl(configData.ServerURL),
+        ServerURL: configData.ServerURL || '',
         Token: configData.Token,
         Username: configData.Username,
         Password: configData.Password,

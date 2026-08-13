@@ -5,13 +5,6 @@ import React, { createContext, useCallback, useContext, useState, useEffect } fr
 import { M3U8Downloader, M3U8DownloadTask } from '@/lib/m3u8-downloader';
 import Toast from '@/components/Toast';
 import { downloadDB } from '@/lib/download-db';
-import {
-  buildIndexedDBVideoCacheKey,
-  getBrowserStorageEstimate,
-  getIndexedDBVideoCacheSize,
-  isIndexedDBVideoDownloaded,
-  requestIndexedDBVideoPersistentStorage,
-} from '@/lib/indexeddb-video-cache';
 
 interface DownloadContextType {
   downloader: M3U8Downloader;
@@ -73,17 +66,13 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     onComplete: async (task) => {
       setTasks(downloader.getAllTasks());
 
-      // File System / IndexedDB 模式保存到已完成任务表，用于本地播放命中和下载管理
-      if (
-        (task.downloadMode === 'filesystem' || task.downloadMode === 'indexeddb') &&
-        task.source &&
-        task.videoId &&
-        task.episodeIndex !== undefined
-      ) {
+      //禁止SzeMeng76抄袭狗抄袭
+      // 只有 filesystem 模式才保存到已完成任务表
+      if (task.downloadMode === 'filesystem' && task.source && task.videoId && task.episodeIndex !== undefined) {
         try {
           // 计算文件大小
           let fileSize: number | undefined;
-          if (task.downloadMode === 'filesystem' && task.filesystemDirHandle) {
+          if (task.filesystemDirHandle) {
             try {
               const sourceDirHandle = await task.filesystemDirHandle.getDirectoryHandle(task.source, { create: false });
               const videoIdDirHandle = await sourceDirHandle.getDirectoryHandle(task.videoId, { create: false });
@@ -101,17 +90,6 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             } catch (error) {
               console.error('计算文件大小失败:', error);
             }
-          } else if (task.downloadMode === 'indexeddb') {
-            try {
-              const cacheKey = task.indexedDBCacheKey || buildIndexedDBVideoCacheKey(
-                task.source,
-                task.videoId,
-                task.episodeIndex
-              );
-              fileSize = await getIndexedDBVideoCacheSize(cacheKey);
-            } catch (error) {
-              console.error('计算 IndexedDB 缓存大小失败:', error);
-            }
           }
 
           await downloadDB.saveCompletedTask({
@@ -121,7 +99,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             videoId: task.videoId,
             episodeIndex: task.episodeIndex,
             completedAt: Date.now(),
-            downloadMode: task.downloadMode,
+            downloadMode: 'filesystem',
             fileSize,
           });
         } catch (error) {
@@ -195,12 +173,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         if (!savedTasks || savedTasks.length === 0) return;
 
         //禁止SzeMeng76抄袭狗抄袭
-        // 读取目录句柄：只要存在待恢复的 filesystem 任务就需要尝试读取，
-        // 不依赖当前用户下载模式设置。
-        const hasFilesystemTask = savedTasks.some((task) => task.downloadMode === 'filesystem');
+        // 读取下载模式和目录句柄
+        const downloadMode = localStorage.getItem('downloadMode') as 'browser' | 'filesystem' || 'browser';
         let dirHandle: FileSystemDirectoryHandle | undefined;
 
-        if (hasFilesystemTask) {
+        if (downloadMode === 'filesystem') {
           const dbName = 'MoonTVPlus';
           const storeName = 'dirHandles';
 
@@ -249,20 +226,14 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
             continue;
           }
 
-          // 已完成的 filesystem/indexeddb 任务标记为删除（已记录到 completedTasks）
-          if (
-            (savedTask.downloadMode === 'filesystem' || savedTask.downloadMode === 'indexeddb') &&
-            savedTask.status === 'done'
-          ) {
+          // 已完成的 filesystem 任务标记为删除
+          if (savedTask.downloadMode === 'filesystem' && savedTask.status === 'done') {
             tasksToDelete.push(savedTask.id);
             continue;
           }
 
-          // 只恢复 filesystem/indexeddb 模式的未完成任务
-          if (
-            (savedTask.downloadMode === 'filesystem' || savedTask.downloadMode === 'indexeddb') &&
-            (savedTask.status === 'downloading' || savedTask.status === 'pause' || savedTask.status === 'ready')
-          ) {
+          // 只恢复 filesystem 模式的未完成任务
+          if (savedTask.downloadMode === 'filesystem' && (savedTask.status === 'downloading' || savedTask.status === 'pause' || savedTask.status === 'ready')) {
             try {
               const taskId = await downloader.createTask(
                 savedTask.url,
@@ -287,15 +258,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
                 task.rangeDownload = savedTask.rangeDownload;
                 task.segmentLogs = savedTask.segmentLogs || [];
 
-                if (savedTask.downloadMode === 'indexeddb' && savedTask.source && savedTask.videoId && savedTask.episodeIndex !== undefined) {
-                  task.indexedDBCacheKey = buildIndexedDBVideoCacheKey(
-                    savedTask.source,
-                    savedTask.videoId,
-                    savedTask.episodeIndex
-                  );
-                }
-
-                if (savedTask.downloadMode === 'filesystem' && dirHandle) {
+                if (dirHandle) {
                   task.filesystemDirHandle = dirHandle;
                 }
               }
@@ -338,7 +301,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     try {
       // 读取下载模式设置
       const downloadMode = typeof window !== 'undefined'
-        ? (localStorage.getItem('downloadMode') as 'browser' | 'filesystem' | 'indexeddb') || 'browser'
+        ? (localStorage.getItem('downloadMode') as 'browser' | 'filesystem') || 'browser'
         : 'browser';
 
       // 如果是 filesystem 模式，检查是否已经下载过
@@ -408,64 +371,12 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 如果是 IndexedDB 模式，检查独立视频缓存库是否已有完整缓存
-      if (
-        downloadMode === 'indexeddb' &&
-        typeof window !== 'undefined' &&
-        metadata?.source &&
-        metadata?.videoId &&
-        metadata?.episodeIndex !== undefined
-      ) {
-        try {
-          const alreadyDownloaded = await isIndexedDBVideoDownloaded(
-            metadata.source,
-            metadata.videoId,
-            metadata.episodeIndex
-          );
-
-          if (alreadyDownloaded) {
-            console.log('视频已下载（IndexedDB 缓存检查），跳过:', title, metadata);
-            setToast({ message: `${title} 已经缓存过了，无需重复下载`, type: 'info' });
-            return;
-          }
-
-          // 尽量请求持久化存储；失败不阻塞，后续仍可降级由浏览器管理配额。
-          requestIndexedDBVideoPersistentStorage().catch(() => undefined);
-
-          const estimate = await getBrowserStorageEstimate();
-          if (estimate?.quota && estimate?.usage) {
-            const freeBytes = estimate.quota - estimate.usage;
-            // 低于 512MB 时提示风险，但不阻塞下载（实际大小需解析后才准确）。
-            if (freeBytes > 0 && freeBytes < 512 * 1024 * 1024) {
-              setToast({
-                message: '浏览器可用存储空间较低，IndexedDB 缓存可能失败',
-                type: 'info',
-              });
-            }
-          }
-        } catch (error) {
-          console.error('检查 IndexedDB 下载状态失败:', error);
-        }
-      }
-
       const taskId = await downloader.createTask(url, title, type, metadata);
 
       // 设置下载模式
       const task = downloader.getTask(taskId);
       if (task) {
         task.downloadMode = downloadMode;
-        if (
-          downloadMode === 'indexeddb' &&
-          metadata?.source &&
-          metadata?.videoId &&
-          metadata?.episodeIndex !== undefined
-        ) {
-          task.indexedDBCacheKey = buildIndexedDBVideoCacheKey(
-            metadata.source,
-            metadata.videoId,
-            metadata.episodeIndex
-          );
-        }
       }
 
       //禁止SzeMeng76抄袭狗抄袭

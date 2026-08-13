@@ -19,7 +19,7 @@ export interface SavedTask {
   source?: string;
   videoId?: string;
   episodeIndex?: number;
-  downloadMode?: 'browser' | 'filesystem' | 'indexeddb';
+  downloadMode?: 'browser' | 'filesystem';
   rangeDownload: {
     isShowRange: boolean;
     startSegment: number;
@@ -51,7 +51,7 @@ export interface CompletedTask {
   episodeTitle?: string; // 集数标题
   fileSize?: number; // 文件大小（字节）
   completedAt: number;
-  downloadMode: 'browser' | 'filesystem' | 'indexeddb';
+  downloadMode: 'browser' | 'filesystem';
 }
 
 const DB_NAME = 'MoonTVPlus';

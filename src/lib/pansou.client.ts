@@ -5,8 +5,6 @@
  * 文档: https://github.com/fish2018/pansou
  */
 
-import { normalizeApiBaseUrl } from '@/lib/url';
-
 // Token 缓存
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null;
@@ -42,8 +40,7 @@ export async function loginPansou(
   password: string
 ): Promise<string> {
   try {
-    const baseUrl = normalizeApiBaseUrl(apiUrl);
-    const response = await fetch(`${baseUrl}/api/auth/login`, {
+    const response = await fetch(`${apiUrl}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -114,10 +111,9 @@ export async function searchPansou(
   }
 ): Promise<PansouSearchResult> {
   try {
-    const baseUrl = normalizeApiBaseUrl(apiUrl);
     // 获取 Token（如果需要认证）
     const token = await getValidToken(
-      baseUrl,
+      apiUrl,
       options?.username,
       options?.password
     );
@@ -145,7 +141,7 @@ export async function searchPansou(
       body.cloud_types = options.cloudTypes;
     }
 
-    const response = await fetch(`${baseUrl}/api/search`, {
+    const response = await fetch(`${apiUrl}/api/search`, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -205,8 +201,7 @@ export function clearPansouToken(): void {
  */
 export async function checkPansouHealth(apiUrl: string): Promise<boolean> {
   try {
-    const baseUrl = normalizeApiBaseUrl(apiUrl);
-    const response = await fetch(`${baseUrl}/api/health`, {
+    const response = await fetch(`${apiUrl}/api/health`, {
       method: 'GET',
     });
 

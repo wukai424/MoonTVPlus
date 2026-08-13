@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
-import { normalizeApiBaseUrl } from '@/lib/url';
 
 export const runtime = 'nodejs';
 
@@ -157,22 +156,22 @@ export async function POST(request: NextRequest) {
       Enabled,
       Provider,
       OpenAIApiKey,
-      OpenAIBaseURL: normalizeApiBaseUrl(OpenAIBaseURL),
+      OpenAIBaseURL,
       OpenAIModel,
       ClaudeApiKey,
       ClaudeModel,
       CustomApiKey,
-      CustomBaseURL: normalizeApiBaseUrl(CustomBaseURL),
+      CustomBaseURL,
       CustomModel,
       EnableDecisionModel,
       DecisionProvider,
       DecisionOpenAIApiKey,
-      DecisionOpenAIBaseURL: normalizeApiBaseUrl(DecisionOpenAIBaseURL),
+      DecisionOpenAIBaseURL,
       DecisionOpenAIModel,
       DecisionClaudeApiKey,
       DecisionClaudeModel,
       DecisionCustomApiKey,
-      DecisionCustomBaseURL: normalizeApiBaseUrl(DecisionCustomBaseURL),
+      DecisionCustomBaseURL,
       DecisionCustomModel,
       EnableWebSearch,
       WebSearchProvider,

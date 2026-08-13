@@ -2,10 +2,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { isAccessTokenInvalidated } from '@/lib/access-token-invalidation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { TOKEN_CONFIG } from '@/lib/refresh-token';
-import { isTVModeEnabled, resolveLoginPath } from '@/lib/tv-mode';
+import { isTVModeEnabled } from '@/lib/tv-mode';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -90,11 +89,6 @@ export async function middleware(request: NextRequest) {
     return handleAuthFailure(request, pathname);
   }
 
-  if (isAccessTokenInvalidated(authInfo)) {
-    console.log(`Access token invalidated for ${authInfo.username}`);
-    return handleAuthFailure(request, pathname);
-  }
-
   // 签名验证通过
   // 注意：Token 续期由前端负责，Middleware 不再自动刷新
   return NextResponse.next();
@@ -158,7 +152,9 @@ function handleAuthFailure(
   }
 
   // TV 端页面未授权时进入电视扫码登录页
-  const loginUrl = new URL(resolveLoginPath(pathname), request.url);
+  const loginUrl = pathname.startsWith('/tv')
+    ? new URL('/tv/login', request.url)
+    : new URL('/login', request.url);
   // 保留完整的URL，包括查询参数
   const fullUrl = `${pathname}${request.nextUrl.search}`;
   loginUrl.searchParams.set('redirect', fullUrl);
@@ -187,6 +183,6 @@ function isTVModePath(pathname: string): boolean {
 // 配置middleware匹配规则
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|login|register|oidc-register|qr-login|warning|tv/login|api/login|api/register|api/logout|api/auth/oidc|api/auth/qr|api/auth/refresh|api/telegram/login|api/telegram/config|api/telegram/webhook|api/cron/|api/server-config|api/proxy-m3u8|api/cms-proxy|api/tvbox/subscribe|api/theme/css|api/openlist/cms-proxy|api/openlist/play|api/emby/cms-proxy|api/emby/play|api/emby/subtitle|api/emby/sources|tvbox/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|login|register|oidc-register|qr-login|warning|tv/login|api/login|api/register|api/logout|api/auth/oidc|api/auth/qr|api/auth/refresh|api/cron/|api/server-config|api/proxy-m3u8|api/cms-proxy|api/tvbox/subscribe|api/theme/css|api/openlist/cms-proxy|api/openlist/play|api/emby/cms-proxy|api/emby/play|api/emby/subtitle|api/emby/sources|tvbox/).*)',
   ],
 };

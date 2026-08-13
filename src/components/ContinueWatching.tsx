@@ -178,7 +178,6 @@ export default function ContinueWatching({ className }: ContinueWatchingProps) {
                       orientation='horizontal'
                       playTime={record.play_time}
                       totalTime={record.total_time}
-                      isAnime={Boolean(record.is_anime)}
                     />
                     {record.new_episodes && record.new_episodes > 0 && (
                       <div

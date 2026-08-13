@@ -244,7 +244,6 @@ function DuanjuPageClient() {
                         year={item.year}
                         from='source-search'
                         type='tv'
-                        isDuanju
                         cmsData={{
                           desc: item.desc,
                           episodes: item.episodes,

@@ -1,5 +1,4 @@
 import { getConfig } from '@/lib/config';
-import { normalizeApiBaseUrl } from '@/lib/url';
 
 export const runtime = 'nodejs';
 
@@ -210,9 +209,7 @@ export async function getMusicV2Config() {
   const musicConfig = config?.MusicConfig;
 
   const enabled = musicConfig?.Enabled ?? false;
-  const baseUrl = normalizeApiBaseUrl(
-    musicConfig?.BaseUrl || process.env.MUSIC_V2_BASE_URL || ''
-  );
+  const baseUrl = (musicConfig?.BaseUrl || process.env.MUSIC_V2_BASE_URL || '').replace(/\/$/, '');
   const token = musicConfig?.Token || process.env.MUSIC_V2_TOKEN || '';
 
   return { enabled, baseUrl, token };

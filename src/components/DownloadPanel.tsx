@@ -62,18 +62,6 @@ export function DownloadPanel() {
     }
   };
 
-  const getDownloadModeText = (mode: M3U8DownloadTask['downloadMode']) => {
-    switch (mode) {
-      case 'filesystem':
-        return 'File System';
-      case 'indexeddb':
-        return 'IndexedDB';
-      case 'browser':
-      default:
-        return '浏览器';
-    }
-  };
-
   const getLogBadgeClass = (status: M3U8SegmentLogStatus) => {
     switch (status) {
       case 'downloading':
@@ -178,9 +166,6 @@ export function DownloadPanel() {
                       </span>
                       <span className='rounded-md border border-gray-200 px-2 py-0.5 text-xs text-gray-500 dark:border-slate-700 dark:text-slate-400'>
                         {task.type}
-                      </span>
-                      <span className='rounded-md border border-gray-200 px-2 py-0.5 text-xs text-gray-500 dark:border-slate-700 dark:text-slate-400'>
-                        {getDownloadModeText(task.downloadMode)}
                       </span>
                     </div>
                   </div>
