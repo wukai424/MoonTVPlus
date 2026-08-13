@@ -19,6 +19,60 @@ interface ApiSearchItem {
   vod_total?: number;
 }
 
+const DEFAULT_SOURCE_API_FALLBACK_PROXY =
+  'https://m3u8-proxy.kaitv.qzz.io/?url=';
+
+export function buildSourceApiUrl(
+  apiBaseUrl: string,
+  queryPath: string
+): string {
+  let baseUrl = apiBaseUrl.trim();
+
+  try {
+    const configuredUrl = new URL(baseUrl);
+    const proxiedTarget = configuredUrl.searchParams.get('url');
+    if (proxiedTarget && /^https?:\/\//i.test(proxiedTarget)) {
+      baseUrl = proxiedTarget;
+    }
+  } catch {
+    // Keep the configured value so the normal request reports the invalid URL.
+  }
+
+  const targetUrl = new URL(baseUrl);
+  const query = new URLSearchParams(queryPath.replace(/^\?/, ''));
+  query.forEach((value, key) => targetUrl.searchParams.set(key, value));
+  return targetUrl.toString();
+}
+
+async function fetchSourceJson(url: string, timeoutMs: number): Promise<any> {
+  const request = async (requestUrl: string, requestTimeoutMs: number) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
+
+    try {
+      const response = await fetch(requestUrl, {
+        headers: API_CONFIG.search.headers,
+        signal: controller.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return await response.json();
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  };
+
+  try {
+    return await request(url, Math.min(3000, timeoutMs));
+  } catch (directError) {
+    const fallbackProxy =
+      process.env.SOURCE_API_FALLBACK_PROXY?.trim() ||
+      DEFAULT_SOURCE_API_FALLBACK_PROXY;
+    if (!fallbackProxy) throw directError;
+
+    return request(`${fallbackProxy}${encodeURIComponent(url)}`, timeoutMs);
+  }
+}
+
 /**
  * 通用的带缓存搜索函数
  */
@@ -40,25 +94,8 @@ async function searchWithCache(
   }
 
   // 缓存未命中，发起网络请求
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
   try {
-    const response = await fetch(url, {
-      headers: API_CONFIG.search.headers,
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      if (response.status === 403) {
-        setCachedSearchPage(apiSite.key, query, page, 'forbidden', []);
-      }
-      return { results: [] };
-    }
-
-    const data = await response.json();
+    const data = await fetchSourceJson(url, timeoutMs);
     if (
       !data ||
       !data.list ||
@@ -122,16 +159,20 @@ async function searchWithCache(
     });
 
     // 过滤掉集数为 0 的结果
-    const results = allResults.filter((result: SearchResult) => result.episodes.length > 0);
+    const results = allResults.filter(
+      (result: SearchResult) => result.episodes.length > 0
+    );
 
     const pageCount = page === 1 ? data.pagecount || 1 : undefined;
     // 写入缓存（成功）
     setCachedSearchPage(apiSite.key, query, page, 'ok', results, pageCount);
     return { results, pageCount };
   } catch (error: any) {
-    clearTimeout(timeoutId);
     // 识别被 AbortController 中止（超时）
-    const aborted = error?.name === 'AbortError' || error?.code === 20 || error?.message?.includes('aborted');
+    const aborted =
+      error?.name === 'AbortError' ||
+      error?.code === 20 ||
+      error?.message?.includes('aborted');
     if (aborted) {
       setCachedSearchPage(apiSite.key, query, page, 'timeout', []);
     }
@@ -145,11 +186,19 @@ export async function searchFromApi(
 ): Promise<SearchResult[]> {
   try {
     const apiBaseUrl = apiSite.api;
-    const apiUrl =
-      apiBaseUrl + API_CONFIG.search.path + encodeURIComponent(query);
+    const apiUrl = buildSourceApiUrl(
+      apiBaseUrl,
+      API_CONFIG.search.path + encodeURIComponent(query)
+    );
 
     // 使用新的缓存搜索函数处理第一页
-    const firstPageResult = await searchWithCache(apiSite, query, 1, apiUrl, 8000);
+    const firstPageResult = await searchWithCache(
+      apiSite,
+      query,
+      1,
+      apiUrl,
+      8000
+    );
     const results = firstPageResult.results;
     const pageCountFromFirst = firstPageResult.pageCount;
 
@@ -166,15 +215,22 @@ export async function searchFromApi(
       const additionalPagePromises = [];
 
       for (let page = 2; page <= pagesToFetch + 1; page++) {
-        const pageUrl =
-          apiBaseUrl +
+        const pageUrl = buildSourceApiUrl(
+          apiBaseUrl,
           API_CONFIG.search.pagePath
             .replace('{query}', encodeURIComponent(query))
-            .replace('{page}', page.toString());
+            .replace('{page}', page.toString())
+        );
 
         const pagePromise = (async () => {
           // 使用新的缓存搜索函数处理分页
-          const pageResult = await searchWithCache(apiSite, query, page, pageUrl, 8000);
+          const pageResult = await searchWithCache(
+            apiSite,
+            query,
+            page,
+            pageUrl,
+            8000
+          );
           return pageResult.results;
         })();
 
@@ -209,23 +265,12 @@ export async function getDetailFromApi(
     return handleSpecialSourceDetail(id, apiSite);
   }
 
-  const detailUrl = `${apiSite.api}${API_CONFIG.detail.path}${id}`;
+  const detailUrl = buildSourceApiUrl(
+    apiSite.api,
+    API_CONFIG.detail.path + encodeURIComponent(id)
+  );
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  const response = await fetch(detailUrl, {
-    headers: API_CONFIG.detail.headers,
-    signal: controller.signal,
-  });
-
-  clearTimeout(timeoutId);
-
-  if (!response.ok) {
-    throw new Error(`详情请求失败: ${response.status}`);
-  }
-
-  const data = await response.json();
+  const data = await fetchSourceJson(detailUrl, 10000);
 
   if (
     !data ||
