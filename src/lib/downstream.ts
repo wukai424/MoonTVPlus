@@ -299,35 +299,15 @@ export async function getDetailFromApiV2(
 ): Promise<SearchResult> {
   const detailUrl = `${apiSite.api}${API_CONFIG.detail.path}${id}`;
 
-  let response: Response | undefined;
-  let lastError: unknown;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  // Some collection APIs intermittently fail DNS/connectivity from Vercel.
-  // Retry once with a longer timeout, while avoiding a cached upstream error.
-  for (const timeoutMs of [10000, 20000]) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const response = await fetch(detailUrl, {
+    headers: API_CONFIG.detail.headers,
+    signal: controller.signal,
+  });
 
-    try {
-      response = await fetch(detailUrl, {
-        headers: API_CONFIG.detail.headers,
-        signal: controller.signal,
-        cache: 'no-store',
-      });
-      if (response.ok || response.status < 500) break;
-      lastError = new Error(`详情请求失败: ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }
-
-  if (!response) {
-    throw lastError instanceof Error
-      ? lastError
-      : new Error('详情请求失败');
-  }
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     throw new Error(`详情请求失败: ${response.status}`);
