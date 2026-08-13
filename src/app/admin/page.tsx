@@ -76,11 +76,6 @@ import {
   ALL_FEATURE_PERMISSION_KEYS,
   FEATURE_PERMISSION_OPTIONS,
 } from '@/lib/feature-permissions';
-import {
-  compileCustomM3u8AdFilter,
-  DEFAULT_CUSTOM_AD_FILTER_CODE,
-  isLegacyUnsafeAdFilterCode,
-} from '@/lib/m3u8-ad-filter';
 
 import AnimeSubscriptionComponent from '@/components/AnimeSubscriptionComponent';
 import CorrectDialog from '@/components/CorrectDialog';
@@ -13119,15 +13114,92 @@ const CustomAdFilterConfig = ({
   const { isLoading, withLoading } = useLoadingState();
   const [adFilterCode, setAdFilterCode] = useState('');
 
-  useEffect(() => {
-    const configuredCode = config?.SiteConfig?.CustomAdFilterCode || '';
+  // 默认去广告代码
+  const defaultAdFilterCode = `function filterAdsFromM3U8(type: string, m3u8Content: string): string {
+  if (!m3u8Content) return '';
 
-    setAdFilterCode(
-      configuredCode && !isLegacyUnsafeAdFilterCode(configuredCode)
-        ? configuredCode
-        : DEFAULT_CUSTOM_AD_FILTER_CODE
-    );
+  // 广告关键字列表
+  const adKeywords = [
+    'sponsor',
+    '/ad/',
+    '/ads/',
+    'advert',
+    'advertisement',
+    '/adjump',
+    'redtraffic'
+  ];
+
+  // 按行分割M3U8内容
+  const lines = m3u8Content.split('\\n');
+  const filteredLines = [];
+
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 跳过 #EXT-X-DISCONTINUITY 标识
+    if (line.includes('#EXT-X-DISCONTINUITY')) {
+      i++;
+      continue;
+    }
+
+    // 如果是 EXTINF 行，检查下一行 URL 是否包含广告关键字
+    if (line.includes('#EXTINF:')) {
+      // 检查下一行 URL 是否包含广告关键字
+      if (i + 1 < lines.length) {
+        const nextLine = lines[i + 1];
+        const containsAdKeyword = adKeywords.some(keyword =>
+          nextLine.toLowerCase().includes(keyword.toLowerCase())
+        );
+
+        if (containsAdKeyword) {
+          // 跳过 EXTINF 行和 URL 行
+          i += 2;
+          continue;
+        }
+      }
+    }
+
+    // 保留当前行
+    filteredLines.push(line);
+    i++;
+  }
+
+  return filteredLines.join('\\n');
+}`;
+
+  useEffect(() => {
+    // 从数据库配置读取自定义去广告代码
+    if (config?.SiteConfig?.CustomAdFilterCode) {
+      setAdFilterCode(config.SiteConfig.CustomAdFilterCode);
+    } else {
+      // 如果数据库没有保存的代码，使用默认代码
+      setAdFilterCode(defaultAdFilterCode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
+
+  // 移除 TypeScript 类型注解，转换为纯 JavaScript
+  const removeTypeAnnotations = (code: string): string => {
+    return (
+      code
+        // 移除函数参数的类型注解：name: type
+        .replace(
+          /(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*([,)])/g,
+          '$1$3'
+        )
+        // 移除函数返回值类型注解：): type {
+        .replace(
+          /\)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*\{/g,
+          ') {'
+        )
+        // 移除变量声明的类型注解：const name: type =
+        .replace(
+          /(const|let|var)\s+(\w+)\s*:\s*(string|number|boolean|any|void|never|unknown|object)\s*=/g,
+          '$1 $2 ='
+        )
+    );
+  };
 
   // 保存自定义去广告代码
   const handleSave = async () => {
@@ -13135,7 +13207,14 @@ const CustomAdFilterConfig = ({
       try {
         // 验证代码语法
         try {
-          compileCustomM3u8AdFilter(adFilterCode);
+          // 移除类型注解后验证
+          const jsCode = removeTypeAnnotations(adFilterCode);
+          // 使用 Function 构造器验证代码是否可以解析
+          new Function(
+            'type',
+            'm3u8Content',
+            jsCode + '\nreturn filterAdsFromM3U8(type, m3u8Content);'
+          );
         } catch (parseError) {
           console.error('代码验证失败:', parseError);
           showError(
@@ -13185,7 +13264,7 @@ const CustomAdFilterConfig = ({
 
   // 重置为默认代码
   const handleReset = () => {
-    setAdFilterCode(DEFAULT_CUSTOM_AD_FILTER_CODE);
+    setAdFilterCode(defaultAdFilterCode);
     showSuccess('已重置为默认代码', showAlert);
   };
 
@@ -13220,9 +13299,7 @@ const CustomAdFilterConfig = ({
           </span>
         </div>
         <div className='text-sm text-blue-700 dark:text-blue-400 space-y-1'>
-          <p>• 内置去广告 v2 会自动识别广告标记、广告链接和短插播</p>
-          <p>• 正常的分段边界会被保留，避免切集、换清晰度时播放异常</p>
-          <p>• 自定义函数会在内置规则前执行，用于补充特定视频源规则</p>
+          <p>• 此功能用于自定义 M3U8 播放列表的去广告逻辑</p>
           <p>• 配置保存到数据库，对全平台所有用户生效</p>
           <p>
             • 客户端会自动缓存代码，只在版本更新时重新获取，不会频繁请求服务器
@@ -13235,7 +13312,7 @@ const CustomAdFilterConfig = ({
           </p>
           <p>• type 参数为视频源类型，m3u8Content 为播放列表内容</p>
           <p>• 函数需要返回处理后的 M3U8 内容</p>
-          <p>• 支持简单的 TypeScript 类型注解，保存前会验证函数格式</p>
+          <p>• 支持 TypeScript 类型注解，保存时会自动转换为 JavaScript</p>
         </div>
       </div>
 
