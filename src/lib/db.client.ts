@@ -17,7 +17,6 @@
 import { getAuthInfoFromBrowserCookie, clearAuthCookie } from './auth';
 import { normalizeEpisodeFilterConfig } from './episode-filter';
 import { MangaReadRecord, MangaShelfItem } from './manga.types';
-import { isLoginPathname, resolveLoginPath } from './tv-mode';
 import { DanmakuFilterConfig, EpisodeFilterConfig, SkipConfig } from './types';
 
 // 全局错误触发函数
@@ -45,8 +44,6 @@ export interface PlayRecord {
   search_title?: string; // 搜索时使用的标题
   origin?: 'vod' | 'live'; // 来源类型
   new_episodes?: number; // 新增的剧集数量（用于显示更新提示）
-  /** 是否动漫（写入时根据 CMS type_name/class 判断） */
-  is_anime?: boolean;
 }
 
 // ---- 收藏类型 ----
@@ -662,7 +659,7 @@ export async function fetchWithAuth(
       // 如果在登录页面，跳过刷新逻辑
       if (
         typeof window !== 'undefined' &&
-        isLoginPathname(window.location.pathname)
+        window.location.pathname === '/login'
       ) {
         console.log('[fetchWithAuth] On login page, skipping refresh logic');
         return res;
@@ -708,7 +705,7 @@ export async function fetchWithAuth(
         // 检查当前页面是否已经是登录页，避免重复跳转
         if (
           typeof window !== 'undefined' &&
-          !isLoginPathname(window.location.pathname)
+          !window.location.pathname.startsWith('/login')
         ) {
           // 调用 logout 接口
           try {
@@ -722,10 +719,7 @@ export async function fetchWithAuth(
             clearAuthCookie();
           }
           const currentUrl = window.location.pathname + window.location.search;
-          const loginUrl = new URL(
-            resolveLoginPath(window.location.pathname),
-            window.location.origin
-          );
+          const loginUrl = new URL('/login', window.location.origin);
           loginUrl.searchParams.set('redirect', currentUrl);
           window.location.href = loginUrl.toString();
         }

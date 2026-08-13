@@ -4,11 +4,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { lockManager } from '@/lib/lock';
-import {
-  createTelegramBindSession,
-  getTelegramConfig,
-  getTelegramDeepLink,
-} from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 
@@ -175,23 +170,6 @@ export async function POST(req: NextRequest) {
           : undefined;
 
         await db.createUserV2(username, password, 'user', defaultTags);
-
-        const telegramConfig = await getTelegramConfig();
-        if (telegramConfig.enabled && telegramConfig.bindingEnabled && telegramConfig.botToken) {
-          const bindSession = await createTelegramBindSession(username);
-          return NextResponse.json({
-            ok: true,
-            message: '注册成功',
-            telegramBind: {
-              code: bindSession.code,
-              expiresAt: bindSession.expiresAt,
-              botUsername: telegramConfig.botUsername,
-              deepLink: telegramConfig.botUsername
-                ? getTelegramDeepLink(telegramConfig.botUsername, `bind_${bindSession.code}`)
-                : '',
-            },
-          });
-        }
 
         // 注册成功
         return NextResponse.json({ ok: true, message: '注册成功' });

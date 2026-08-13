@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   clearBangumiImageFallbackCacheIfFailed,
-  ensureBangumiImagePrimaryProbed,
   processImageUrl,
   tryApplyBangumiImageFallback,
   tryApplyDoubanImageFallback,
@@ -39,21 +38,22 @@ const ProxyImage: React.FC<ProxyImageProps> = ({
     setCurrentSrc(initialSrc);
   }, [initialSrc]);
 
-  // 主源图片域主页探测：失败则 sticky 走备源（替代原 5s complete 误判）
   useEffect(() => {
     if (displaySrc) return;
 
-    let cancelled = false;
-    void (async () => {
-      const reachable = await ensureBangumiImagePrimaryProbed();
-      if (cancelled || reachable) return;
-      setCurrentSrc(processImageUrl(originalSrc));
-    })();
+    const timer = window.setTimeout(() => {
+      const img = imgRef.current;
+      if (!img || img.complete || img.dataset.bangumiBackupTried === 'true') {
+        return;
+      }
 
-    return () => {
-      cancelled = true;
-    };
-  }, [displaySrc, originalSrc]);
+      if (tryApplyBangumiImageFallback(img, originalSrc)) {
+        setCurrentSrc(img.src);
+      }
+    }, 5000);
+
+    return () => window.clearTimeout(timer);
+  }, [currentSrc, displaySrc, originalSrc]);
 
   const handleError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     const img = e.currentTarget;

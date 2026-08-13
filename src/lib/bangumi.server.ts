@@ -3,15 +3,9 @@
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import nodeFetch from 'node-fetch';
 
-export type AnimeDataSource =
-  | 'direct'
-  | 'server-proxy'
-  | 'custom-baseurl'
-  | 'sakura';
+export type AnimeDataSource = 'direct' | 'server-proxy' | 'custom-baseurl';
 
 export const DEFAULT_BANGUMI_BASE_URL = 'https://api.bgm.tv';
-/** 桜色镜像站 API */
-export const BANGUMI_SAKURA_API_BASE_URL = 'https://api.bangumi.lol';
 
 function isCloudflareEnvironment(): boolean {
   return (

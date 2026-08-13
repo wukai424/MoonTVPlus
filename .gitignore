@@ -35,9 +35,6 @@ yarn-error.log*
 
 # cloudflare
 .open-next/
-
-# edgeone
-.edgeone/
 .wrangler/
 wrangler.toml.bak
 

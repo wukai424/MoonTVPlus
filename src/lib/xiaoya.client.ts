@@ -1,7 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { normalizeApiBaseUrl } from '@/lib/url';
-
 // Token 内存缓存
 const tokenCache = new Map<string, { token: string; expiresAt: number }>();
 
@@ -19,16 +17,13 @@ export interface XiaoyaListResponse {
 
 export class XiaoyaClient {
   private token = '';
-  private baseURL: string;
 
   constructor(
-    baseURL: string,
+    private baseURL: string,
     private username?: string,
     private password?: string,
     private configToken?: string
-  ) {
-    this.baseURL = normalizeApiBaseUrl(baseURL);
-  }
+  ) {}
 
   /**
    * 使用账号密码登录获取Token
@@ -38,8 +33,7 @@ export class XiaoyaClient {
     username: string,
     password: string
   ): Promise<string> {
-    const normalizedBaseURL = normalizeApiBaseUrl(baseURL);
-    const response = await fetch(`${normalizedBaseURL}/api/auth/login`, {
+    const response = await fetch(`${baseURL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -11,12 +11,8 @@ export const runtime = 'nodejs';
 
 const pickText = (value: any): string => {
   if (value === undefined || value === null) return '';
-  const first = Array.isArray(value) ? value[0] : value;
-  if (first === undefined || first === null) return '';
-  if (typeof first === 'object') {
-    return String(first._ ?? first.$?.url ?? first.$?.href ?? '').trim();
-  }
-  return String(first).trim();
+  if (Array.isArray(value)) return String(value[0] ?? '');
+  return String(value);
 };
 
 /**
@@ -101,28 +97,24 @@ export async function POST(req: NextRequest) {
 
     const items = parsed.rss.channel[0].item;
 
-    const results = items.map((item: any, index: number) => {
+    const results = items.map((item: any) => {
       const title = pickText(item.title);
       const link = pickText(item.link);
+      const guid = pickText(item.guid) || link || `${title}-${pickText(item.torrent?.[0]?.pubDate)}`;
       const pubDate =
         pickText(item.pubDate) ||
         pickText(item.torrent?.[0]?.pubDate) ||
         pickText(item['dc:date']);
+
       const description =
         pickText(item.description) ||
         pickText(item['content:encoded']) ||
         '';
+
       const torrentUrl =
         pickText(item.enclosure?.[0]?.$?.url) ||
         pickText(item.enclosure?.[0]?.$?.href) ||
-        pickText(item.enclosure?.[0]) ||
         '';
-      // guid 必须是唯一纯字符串，避免 xml 对象导致前端 key 冲突
-      const guid =
-        pickText(item.guid) ||
-        torrentUrl ||
-        link ||
-        `${title}-${pubDate}-${index}`;
 
       // 提取描述中的图片（如果有）
       let images: string[] = [];

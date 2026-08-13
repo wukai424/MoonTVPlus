@@ -2,29 +2,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { invalidateUserAccessTokens } from '@/lib/access-token-invalidation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
-import { db, getStorage } from '@/lib/db';
+import { db } from '@/lib/db';
 import { sanitizeFeaturePermissions } from '@/lib/feature-permissions';
-import { revokeAllRefreshTokens } from '@/lib/refresh-token';
 
 export const runtime = 'nodejs';
 
 // 支持的操作类型
-
-async function terminateUserSessions(username: string, reason: string): Promise<void> {
-  try {
-    invalidateUserAccessTokens(username);
-    await revokeAllRefreshTokens(username);
-    const storage = getStorage();
-    await storage.deleteAllPushSubscriptions?.(username);
-    console.log(`Terminated all sessions for ${username}: ${reason}`);
-  } catch (error) {
-    console.error(`Failed to terminate sessions for ${username}:`, error);
-  }
-}
-
 const ACTIONS = [
   'add',
   'ban',
@@ -209,7 +194,6 @@ export async function POST(request: NextRequest) {
 
         // 只更新V2存储
         await db.updateUserInfoV2(targetUsername!, { banned: true });
-        await terminateUserSessions(targetUsername!, 'user banned');
         break;
       }
       case 'unban': {
@@ -278,7 +262,6 @@ export async function POST(request: NextRequest) {
 
         // 只更新V2存储
         await db.updateUserInfoV2(targetUsername!, { role: 'user' });
-        await terminateUserSessions(targetUsername!, 'admin role revoked');
         break;
       }
       case 'changePassword': {
@@ -313,7 +296,6 @@ export async function POST(request: NextRequest) {
 
         // 使用新版本修改密码（SHA256加密）
         await db.changePasswordV2(targetUsername!, targetPassword);
-        await terminateUserSessions(targetUsername!, 'password changed by admin');
         break;
       }
       case 'deleteUser': {
@@ -339,8 +321,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // 先终止目标用户所有会话，再删除V2存储中的用户
-        await terminateUserSessions(targetUsername!, 'user deleted');
+        // 只删除V2存储中的用户
         await db.deleteUserV2(targetUsername!);
 
         break;

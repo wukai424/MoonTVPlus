@@ -6,7 +6,6 @@
 
 import { fetchDoubanData as fetchDoubanAPI } from '@/lib/douban';
 import { getNextApiKey } from '@/lib/tmdb.client';
-import { normalizeApiBaseUrl } from '@/lib/url';
 
 export interface VideoContext {
   title?: string;
@@ -469,9 +468,7 @@ ${availableSources.length === 0 ? '⚠️ 没有可用的数据源，请返回�
       }
     } else {
       // OpenAI 或 自定义 (OpenAI兼容格式)
-      const baseURL = normalizeApiBaseUrl(
-        config.baseURL || 'https://api.openai.com/v1'
-      );
+      const baseURL = config.baseURL || 'https://api.openai.com/v1';
       response = await fetch(`${baseURL}/chat/completions`, {
         method: 'POST',
         headers: {
