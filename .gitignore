@@ -76,3 +76,5 @@ scripts/test
 skills-lock.json
 
 .vercel
+# Local environment files may contain deployment secrets.
+.env*
