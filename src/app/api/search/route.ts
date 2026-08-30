@@ -19,9 +19,7 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const username = authInfo?.username || 'local-user';
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -46,10 +44,10 @@ export async function GET(request: NextRequest) {
   const config = await getConfig();
   const apiSites = privateOnly
     ? []
-    : await getAvailableApiSites(authInfo.username, includeSpecialSources);
+    : await getAvailableApiSites(username, includeSpecialSources);
   const [canAccessOpenList, canAccessEmby] = await Promise.all([
-    hasFeaturePermission(authInfo.username, 'private_library'),
-    hasFeaturePermission(authInfo.username, 'emby'),
+    hasFeaturePermission(username, 'private_library'),
+    hasFeaturePermission(username, 'emby'),
   ]);
 
   // 创建权重映射表

@@ -230,6 +230,61 @@ export async function getDanmakuByUrl(url: string): Promise<DanmakuComment[]> {
 // opencc-js 繁简转换逻辑已拆到独立客户端文件，避免服务端 bundle 内联其字典
 import { convertDanmakuText } from './traditional-to-simplified';
 
+// 获取单集弹幕数量（轻量模式，不返回完整弹幕数据）
+export async function getEpisodeDanmakuCount(
+  episodeId: number,
+  signal?: AbortSignal
+): Promise<number> {
+  try {
+    const url = `/api/danmaku/comment?episodeId=${episodeId}&countOnly=true`;
+    const response = await fetch(url, { signal });
+
+    if (!response.ok) {
+      return 0;
+    }
+
+    const data = await response.json();
+    return data.count || 0;
+  } catch (error) {
+    // 忽略 abort 错误
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return 0;
+    }
+    console.error('获取弹幕数量失败:', episodeId, error);
+    return 0;
+  }
+}
+
+// 批量获取弹幕数量
+export async function getBatchEpisodeDanmakuCounts(
+  episodeIds: number[],
+  onProgress?: (episodeId: number, count: number) => void,
+  signal?: AbortSignal
+): Promise<Map<number, number>> {
+  const counts = new Map<number, number>();
+
+  // 分批处理，每批 5 个
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < episodeIds.length; i += BATCH_SIZE) {
+    const batch = episodeIds.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map((id) =>
+        getEpisodeDanmakuCount(id, signal).then((count) => ({ id, count }))
+      )
+    );
+
+    for (const { id, count } of results) {
+      counts.set(id, count);
+      onProgress?.(id, count);
+    }
+
+    // 如果已取消，提前退出
+    if (signal?.aborted) break;
+  }
+
+  return counts;
+}
+
 // 将 danmu_api 的弹幕格式转换为 artplayer-plugin-danmuku 格式
 export function convertDanmakuFormat(
   comments: DanmakuComment[]

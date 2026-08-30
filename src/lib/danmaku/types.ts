@@ -106,6 +106,7 @@ export interface DanmakuBangumi {
 export interface DanmakuEpisode {
   episodeId: number;
   episodeTitle: string;
+  danmakuCount?: number; // 弹幕数量（从缓存获取，可能为 0）
 }
 
 // 弹幕选择状态

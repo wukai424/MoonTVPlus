@@ -3,8 +3,11 @@
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
-const QUARK_SHARE_API_BASE = 'https://drive-h.quark.cn/1/clouddrive';
-const QUARK_DRIVE_API_BASE = 'https://drive-pc.quark.cn/1/clouddrive';
+const QUARK_PROXY_BASE = (
+  process.env.QUARK_PROXY_BASE || 'https://quark-proxy.kaitv.qzz.io'
+).replace(/\/+$/, '');
+const QUARK_SHARE_API_BASE = `${QUARK_PROXY_BASE}/h/1/clouddrive`;
+const QUARK_DRIVE_API_BASE = `${QUARK_PROXY_BASE}/pc/1/clouddrive`;
 const QUARK_QUERY = 'pr=ucpro&fr=pc';
 const QUARK_API_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) quark-cloud-drive/2.5.20 Chrome/100.0.4896.160 Electron/18.3.5.4-b478491100 Safari/537.36 Channel/pckk_other_ch';

@@ -1362,6 +1362,21 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                     影片匹配有误？点击去搜索
                   </button>
                 </div>
+                {videoTitle && (
+                  <div className='flex-shrink-0 pt-2 border-t border-gray-400 dark:border-gray-700'>
+                    <button
+                      onClick={() => {
+                        window.open(
+                          `https://video.isyour.love/player/getplayer?url=${encodeURIComponent(videoTitle)}&autoplay=true`,
+                          '_blank'
+                        );
+                      }}
+                      className='w-full text-center text-sm font-medium text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 transition-colors py-3'
+                    >
+                      🎬 邦宁云播高画质
+                    </button>
+                  </div>
+                )}
               </div>
             )}
         </div>

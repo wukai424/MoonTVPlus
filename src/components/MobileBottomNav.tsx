@@ -96,6 +96,7 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
             },
           ]
         : []),
+      { icon: Star, label: '纪录片', href: '/documentary' },
     ];
 
     // 如果启用网络直播，添加网络直播入口

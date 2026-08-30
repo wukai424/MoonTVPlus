@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const episodeId = searchParams.get('episodeId');
     const url = searchParams.get('url');
+    const countOnly = searchParams.get('countOnly') === 'true';
 
     // 至少需要一个参数
     if (!episodeId && !url) {
@@ -88,6 +89,14 @@ export async function GET(request: NextRequest) {
 
       // 解析 XML 为 JSON
       const comments = parseXmlDanmaku(xmlText);
+
+      // countOnly 模式：只返回数量，不返回完整弹幕数据
+      if (countOnly) {
+        return NextResponse.json({
+          count: comments.length,
+          episodeId: episodeId ? Number(episodeId) : undefined,
+        });
+      }
 
       return NextResponse.json({
         count: comments.length,
