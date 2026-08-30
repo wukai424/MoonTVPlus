@@ -177,7 +177,8 @@ export default function TVNativeVideo({
           if (disposed) return;
           const Hls = HlsModule.default;
           if (Hls.isSupported()) {
-            const CustomLoader = adFilterEnabled
+            // /api/proxy-m3u8 已在服务端执行控制面板的自定义规则，避免 TV 再次过滤。
+            const CustomLoader = adFilterEnabled && !url.includes('/api/proxy-m3u8')
               ? class TVAdFilterLoader extends Hls.DefaultConfig.loader {
                   constructor(config: any) {
                     super(config);

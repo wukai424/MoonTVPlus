@@ -73,7 +73,12 @@ export async function fetchTVDetail(params: {
   return { detail, sources };
 }
 
-export async function resolveTVEpisodeUrl(rawUrl: string, source?: string, proxyMode?: boolean) {
+export async function resolveTVEpisodeUrl(
+  rawUrl: string,
+  source?: string,
+  proxyMode?: boolean,
+  adFilterEnabled = false
+) {
   let url = rawUrl;
   const lazyPrefixes = [
     '/api/xiaoya/play',
@@ -93,6 +98,34 @@ export async function resolveTVEpisodeUrl(rawUrl: string, source?: string, proxy
   }
 
   const isM3u8 = url.toLowerCase().includes('.m3u') || !url.toLowerCase().match(/\.(mp4|flv|webm|mkv|avi|mov)(\?.*)?$/);
+  if (isM3u8 && adFilterEnabled) {
+    const parsedUrl = new URL(url, window.location.origin);
+
+    if (parsedUrl.pathname === '/api/proxy-m3u8') {
+      parsedUrl.searchParams.delete('adblock');
+      return `${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}`;
+    }
+
+    let originalUrl = url;
+    let proxySegments = Boolean(proxyMode);
+
+    if (parsedUrl.pathname === '/api/proxy/vod/m3u8') {
+      originalUrl = parsedUrl.searchParams.get('url') || '';
+      proxySegments = true;
+    } else if (parsedUrl.pathname === '/api/proxy/m3u8') {
+      originalUrl = parsedUrl.searchParams.get('url') || '';
+    }
+
+    if (/^https?:\/\//i.test(originalUrl)) {
+      const params = new URLSearchParams({
+        url: originalUrl,
+        source: source || 'directplay',
+      });
+      if (proxySegments) params.set('proxySegments', 'true');
+      return `/api/proxy-m3u8?${params.toString()}`;
+    }
+  }
+
   if (proxyMode && source && isM3u8 && !url.startsWith('/api/proxy/')) {
     return `/api/proxy/vod/m3u8?url=${encodeURIComponent(url)}&source=${encodeURIComponent(source)}`;
   }

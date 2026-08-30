@@ -575,7 +575,8 @@ function TVPlayClient() {
         const url = await resolveTVEpisodeUrl(
           detail.episodes[episodeIndex],
           detail.source,
-          detail.proxyMode
+          detail.proxyMode,
+          adFilterEnabled
         );
         if (alive) setVideoUrl(url);
       } catch (err) {
@@ -589,7 +590,7 @@ function TVPlayClient() {
     return () => {
       alive = false;
     };
-  }, [detail, episodeIndex, retryNonce]);
+  }, [detail, episodeIndex, retryNonce, adFilterEnabled]);
 
   const episodeTitle = useMemo(
     () =>
