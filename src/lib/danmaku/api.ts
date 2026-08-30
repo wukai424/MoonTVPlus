@@ -227,6 +227,9 @@ export async function getDanmakuByUrl(url: string): Promise<DanmakuComment[]> {
   }
 }
 
+// opencc-js 繁简转换逻辑已拆到独立客户端文件，避免服务端 bundle 内联其字典
+import { convertDanmakuText } from './traditional-to-simplified';
+
 // 获取单集弹幕数量（轻量模式，不返回完整弹幕数据）
 export async function getEpisodeDanmakuCount(
   episodeId: number,
@@ -308,7 +311,7 @@ export function convertDanmakuFormat(
     else if (type === 4) mode = 2; // 底部
 
     return {
-      text: comment.m,
+      text: convertDanmakuText(comment.m),
       time,
       color,
       border: false,

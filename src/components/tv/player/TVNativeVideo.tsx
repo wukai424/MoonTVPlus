@@ -177,7 +177,8 @@ export default function TVNativeVideo({
           if (disposed) return;
           const Hls = HlsModule.default;
           if (Hls.isSupported()) {
-            const CustomLoader = adFilterEnabled
+            // /api/proxy-m3u8 已在服务端执行控制面板的自定义规则，避免 TV 再次过滤。
+            const CustomLoader = adFilterEnabled && !url.includes('/api/proxy-m3u8')
               ? class TVAdFilterLoader extends Hls.DefaultConfig.loader {
                   constructor(config: any) {
                     super(config);
@@ -198,52 +199,11 @@ export default function TVNativeVideo({
                 }
               : undefined;
             const hls = new Hls({
-              enableWorker: false,
+              enableWorker: true,
               lowLatencyMode: live,
               backBufferLength: live ? 10 : 30,
               maxBufferLength: live ? 18 : 45,
               ...(CustomLoader ? { loader: CustomLoader } : {}),
-              // 部分 CDN（如 ffzy-plays.com）对 m3u8 的 HEAD 请求返回 502，
-              // 但 GET 正常。用自定义 pLoader 跳过 HEAD 探测。
-              pLoader: class {
-                private config: any;
-                private loader: any;
-                private stats: any;
-                constructor(config: any) { this.config = config; }
-                destroy() {}
-                abort() { this.loader?.abort?.(); }
-                load(context: any, config: any, callbacks: any) {
-                  this.stats = { trequest: performance.now(), retry: 0 };
-                  const controller = new AbortController();
-                  this.loader = controller;
-                  // 跨域请求走 CF Worker 代理绕过 Origin 热链保护
-                  const targetUrl = context.url.startsWith('https://') &&
-                    !context.url.includes('kaitv.qzz.io')
-                    ? `https://m3u8-proxy.kaitv.qzz.io/?url=${encodeURIComponent(context.url)}`
-                    : context.url;
-                  fetch(targetUrl, {
-                    method: 'GET',
-                    signal: config.signal || controller.signal,
-                  })
-                  .then(async res => {
-                    this.stats.tfirst = performance.now();
-                    this.stats.loaded = 0;
-                    this.stats.total = parseInt(res.headers.get('Content-Length') || '0') || 0;
-                    callbacks.onProgress?.(this.stats, context, null, null);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    const data = context.responseType === 'arraybuffer'
-                      ? await res.arrayBuffer()
-                      : await res.text();
-                    this.stats.tload = performance.now();
-                    return { url: res.url, data };
-                  })
-                  .then((response: any) => callbacks.onSuccess(response, this.stats, context, null))
-                  .catch(err => {
-                    this.stats.tload = performance.now();
-                    callbacks.onError({ code: (err as any)?.code || 0, text: (err as any)?.message }, this.stats, context, null);
-                  });
-                }
-              } as any,
             });
             hls.loadSource(url);
             hls.attachMedia(videoEl);

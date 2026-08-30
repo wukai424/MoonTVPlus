@@ -159,7 +159,7 @@ export default function WebLivePage() {
     private loader: any;
     private stats: any;
     constructor(config: any) { this.config = config; }
-    destroy() {}
+    destroy() { this.abort(); }
     abort() { this.loader?.abort?.(); }
     load(context: any, config: any, callbacks: any) {
       this.stats = { trequest: performance.now(), retry: 0 };

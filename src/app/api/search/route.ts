@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
   const includeSpecialSources = searchParams.get('special') === '1';
+  const privateOnly = searchParams.get('privateOnly') === '1';
 
   if (!query) {
     const cacheTime = await getCacheTime();
@@ -41,7 +42,9 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = await getAvailableApiSites(username, includeSpecialSources);
+  const apiSites = privateOnly
+    ? []
+    : await getAvailableApiSites(username, includeSpecialSources);
   const [canAccessOpenList, canAccessEmby] = await Promise.all([
     hasFeaturePermission(username, 'private_library'),
     hasFeaturePermission(username, 'emby'),
@@ -189,7 +192,7 @@ export async function GET(request: NextRequest) {
     })
   );
 
-  const scriptSummaries = await listEnabledSourceScripts();
+  const scriptSummaries = privateOnly ? [] : await listEnabledSourceScripts();
   const scriptPromises = scriptSummaries.map((script) =>
     Promise.race([
       (async () => {

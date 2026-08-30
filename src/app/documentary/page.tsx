@@ -50,7 +50,9 @@ function DocumentaryClient() {
         ...(md.list || []).map((i: any) => ({ ...i })),
         ...(td.list || []).map((i: any) => ({ ...i })),
       ]);
-    }).catch(() => {}).finally(() => setLoading(false));
+    }).catch((error) => {
+      console.warn('加载纪录片数据失败:', error);
+    }).finally(() => setLoading(false));
   }, [theme]);
 
   const sorted = [...items].sort((a, b) => {

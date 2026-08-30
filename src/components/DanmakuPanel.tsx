@@ -47,34 +47,6 @@ export default function DanmakuPanel({
   const [episodeDanmakuCounts, setEpisodeDanmakuCounts] = useState<Map<number, number>>(new Map());
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  // 批量获取当前分组内剧集的弹幕数量
-  const fetchDanmakuCounts = useCallback(async (episodeList: DanmakuEpisode[]) => {
-    // 取消之前的请求
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    const episodeIds = episodeList
-      .map(ep => ep.episodeId)
-      .filter(id => id && !episodeDanmakuCounts.has(id));
-
-    if (episodeIds.length === 0) return;
-
-    await getBatchEpisodeDanmakuCounts(
-      episodeIds,
-      (episodeId, count) => {
-        setEpisodeDanmakuCounts(prev => {
-          const next = new Map(prev);
-          next.set(episodeId, count);
-          return next;
-        });
-      },
-      controller.signal
-    );
-  }, [episodeDanmakuCounts]);
-
   // 当当前分组的剧集变化时，触发批量获取弹幕数量
   useEffect(() => {
     if (episodes.length === 0) return;
